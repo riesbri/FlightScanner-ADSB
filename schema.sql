@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS flights (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    flight_number VARCHAR(10) NOT NULL,
+    origin VARCHAR(4) NOT NULL,
+    aircraft VARCHAR(50) NOT NULL,
+    scheduled_time DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
