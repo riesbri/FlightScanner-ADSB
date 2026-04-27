@@ -150,6 +150,102 @@ public class ConfigManager {
         return Boolean.parseBoolean(value);
     }
     
+    public String getAirportCode() {
+        return airportCode;
+    }
+    
+    public int getScrapeIntervalMinutes() {
+        return scrapeIntervalMinutes;
+    }
+    
+    public int getMaxRetries() {
+        return maxRetries;
+    }
+    
+    public int getRetryDelaySeconds() {
+        return retryDelaySeconds;
+    }
+    
+    public boolean isTelegramEnabled() {
+        return telegramEnabled;
+    }
+    
+    public String getTelegramBotToken() {
+        return telegramBotToken;
+    }
+    
+    public String getTelegramChatId() {
+        return telegramChatId;
+    }
+    
+    public boolean isAiAnalysisEnabled() {
+        return aiAnalysisEnabled;
+    }
+    
+    public String getDeepseekApiKey() {
+        return deepseekApiKey;
+    }
+    
+    public boolean isAdsbEnabled() {
+        return adsbEnabled;
+    }
+    
+    public String getAdsbSourceType() {
+        return adsbSourceType;
+    }
+    
+    public String getAdsbHost() {
+        return adsbHost;
+    }
+    
+    public int getAdsbPort() {
+        return adsbPort;
+    }
+    
+    public int getAdsbAircraftTimeoutSeconds() {
+        return adsbAircraftTimeoutSeconds;
+    }
+    
+    public int getAdsbReconnectDelaySeconds() {
+        return adsbReconnectDelaySeconds;
+    }
+    
+    public int getAdsbSaveIntervalMinutes() {
+        return adsbSaveIntervalMinutes;
+    }
+    
+    public int getAdsbNotificationCooldownHours() {
+        return adsbNotificationCooldownHours;
+    }
+    
+    public String getDbType() {
+        return dbType;
+    }
+    
+    public String getDbUrl() {
+        return dbUrl;
+    }
+    
+    public String getDbUser() {
+        return dbUser;
+    }
+    
+    public String getDbPassword() {
+        return dbPassword;
+    }
+    
+    public int getDbPoolMaxSize() {
+        return dbPoolMaxSize;
+    }
+    
+    public int getDbPoolMinSize() {
+        return dbPoolMinSize;
+    }
+    
+    public long getDbConnectionTimeoutMs() {
+        return dbConnectionTimeoutMs;
+    }
+    
     public void validate() throws IllegalStateException {
         if (airportCode == null || airportCode.isEmpty()) {
             throw new IllegalStateException("airport.code must be configured");

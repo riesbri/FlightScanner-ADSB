@@ -18,7 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 public class FlightTrackerApp {
-    
     private final ConfigManager config;
     private final FlightRepository repository;
     private final FlightScraperService scraper;

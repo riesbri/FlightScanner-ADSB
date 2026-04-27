@@ -112,7 +112,7 @@
 					<archive>
 						<manifest>
 							<addClasspath>true</addClasspath>
-							<mainClass>com.richi.FlightDatabase</mainClass>
+							<mainClass>com.richi.FlightTrackerApp</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
@@ -127,7 +127,7 @@
 					</descriptorRefs>
 					<archive>
 						<manifest>
-							<mainClass>com.richi.FlightTracker</mainClass>
+							<mainClass>com.richi.FlightTrackerApp</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
