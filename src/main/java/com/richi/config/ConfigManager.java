@@ -32,10 +32,10 @@ public class ConfigManager {
     private final int dbPoolMinSize;
     private final long dbConnectionTimeoutMs;
     
-    // Telegram settings
-    private final boolean telegramEnabled;
-    private final String telegramBotToken;
-    private final String telegramChatId;
+    // Discord settings
+    private final boolean discordEnabled;
+    private final String discordWebhookUrl;
+    private final boolean discordNotifyAll;
     
     // AI settings
     private final boolean aiAnalysisEnabled;
@@ -77,10 +77,10 @@ public class ConfigManager {
         this.dbPoolMinSize = getInt("db.pool.size.min", 2);
         this.dbConnectionTimeoutMs = getLong("db.connection.timeout.ms", 30000);
         
-        // Telegram
-        this.telegramEnabled = getBoolean("telegram.enabled", false);
-        this.telegramBotToken = getString("telegram.bot.token", "");
-        this.telegramChatId = getString("telegram.chat.id", "");
+        // Discord
+        this.discordEnabled = getBoolean("discord.enabled", false);
+        this.discordWebhookUrl = getString("discord.webhook.url", "");
+        this.discordNotifyAll = getBoolean("discord.notify.all", false);
         
         // AI
         this.aiAnalysisEnabled = getBoolean("ai.analysis.enabled", false);
@@ -166,16 +166,16 @@ public class ConfigManager {
         return retryDelaySeconds;
     }
     
-    public boolean isTelegramEnabled() {
-        return telegramEnabled;
+    public boolean isDiscordEnabled() {
+        return discordEnabled;
     }
     
-    public String getTelegramBotToken() {
-        return telegramBotToken;
+    public String getDiscordWebhookUrl() {
+        return discordWebhookUrl;
     }
     
-    public String getTelegramChatId() {
-        return telegramChatId;
+    public boolean isDiscordNotifyAll() {
+        return discordNotifyAll;
     }
     
     public boolean isAiAnalysisEnabled() {
@@ -257,12 +257,9 @@ public class ConfigManager {
             }
         }
         
-        if (telegramEnabled) {
-            if (telegramBotToken.isEmpty()) {
-                throw new IllegalStateException("telegram.bot.token must be set when telegram.enabled=true");
-            }
-            if (telegramChatId.isEmpty()) {
-                throw new IllegalStateException("telegram.chat.id must be set when telegram.enabled=true");
+        if (discordEnabled) {
+            if (discordWebhookUrl.isEmpty() || discordWebhookUrl.startsWith("${")) {
+                throw new IllegalStateException("discord.webhook.url must be set when discord.enabled=true");
             }
         }
         

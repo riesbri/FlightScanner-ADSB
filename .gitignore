@@ -1,9 +1,26 @@
+# Build output
 /target/
-/.idea/
-*.iml
-*.log
-*.class
-.DS_Store
-.env
 /bin/
 /build/
+*.class
+*.log
+
+# IDE files
+/.idea/
+.classpath
+.project
+.factorypath
+.settings/
+
+# Environment & secrets
+.env
+*.env
+
+# Database files
+*.db
+
+# Screenshots
+screenshots/
+
+# OS files
+.DS_Store

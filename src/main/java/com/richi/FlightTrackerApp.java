@@ -5,7 +5,7 @@ import com.richi.analyzer.LocalAircraftAnalyzer;
 import com.richi.config.ConfigManager;
 import com.richi.model.Flight;
 import com.richi.notification.FlightNotifier;
-import com.richi.notification.TelegramFlightNotifier;
+import com.richi.notification.DiscordFlightNotifier;
 import com.richi.repository.FlightRepository;
 import com.richi.repository.SqlFlightRepository;
 import com.richi.service.FlightScraperService;
@@ -37,7 +37,7 @@ public class FlightTrackerApp {
         this.repository = new SqlFlightRepository(config);
         this.scraper = new PlaywrightFlightScraper(config);
         this.analyzer = new LocalAircraftAnalyzer(config);
-        this.notifier = new TelegramFlightNotifier(config);
+        this.notifier = new DiscordFlightNotifier(config);
         
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "flight-tracker-scheduler");
@@ -182,8 +182,8 @@ public class FlightTrackerApp {
         }
         
         try {
-            if (notifier instanceof TelegramFlightNotifier telegram) {
-                telegram.close();
+            if (notifier instanceof DiscordFlightNotifier discord) {
+                discord.close();
             }
         } catch (Exception e) {
             log.error("Error closing notifier: {}", e.getMessage());

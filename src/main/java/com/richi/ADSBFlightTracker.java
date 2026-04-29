@@ -8,8 +8,8 @@ import com.richi.analyzer.AircraftAnalyzerService;
 import com.richi.analyzer.LocalAircraftAnalyzer;
 import com.richi.config.ConfigManager;
 import com.richi.model.Flight;
+import com.richi.notification.DiscordFlightNotifier;
 import com.richi.notification.FlightNotifier;
-import com.richi.notification.TelegramFlightNotifier;
 import com.richi.repository.FlightRepository;
 import com.richi.repository.SqlFlightRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +52,7 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
         this.dataSource = new Dump1090DataSource(config);
         this.repository = new SqlFlightRepository(config);
         this.analyzer = new LocalAircraftAnalyzer(config);
-        this.notifier = new TelegramFlightNotifier(config);
+        this.notifier = new DiscordFlightNotifier(config);
         
         this.executor = Executors.newScheduledThreadPool(2, r -> {
             Thread t = new Thread(r, "adsb-tracker");
@@ -177,9 +177,10 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     public void onAircraftDetected(Flight flight) {
         log.info("🛬 New aircraft detected: {} ({})", flight.flightNumber(), flight.aircraft());
         
-        // Check if this is an interesting aircraft
-        if (analyzer.isWidebody(flight.aircraft())) {
-            maybeNotify(flight, "Widebody detected");
+        // Notify if interesting, or if notify-all mode is enabled
+        if (config.isDiscordNotifyAll() || analyzer.isWidebody(flight.aircraft())) {
+            String reason = config.isDiscordNotifyAll() ? "Aircraft detected (all mode)" : "Widebody detected";
+            maybeNotify(flight, reason);
         }
     }
     

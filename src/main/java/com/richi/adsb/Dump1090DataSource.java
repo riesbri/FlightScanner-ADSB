@@ -2,6 +2,7 @@ package com.richi.adsb;
 
 import com.richi.config.ConfigManager;
 import com.richi.model.Flight;
+import com.richi.service.AircraftEnrichmentService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;
@@ -50,6 +51,10 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
     
     // Cleanup task for stale aircraft
     private ScheduledExecutorService cleanupExecutor;
+    private final ExecutorService enrichmentExecutor;
+    
+    // Aircraft enrichment
+    private final AircraftEnrichmentService enrichment;
     
     public Dump1090DataSource() {
         this(ConfigManager.getInstance());
@@ -69,7 +74,22 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
         this.port = port;
         this.aircraftTimeout = Duration.ofSeconds(timeoutSeconds);
         this.reconnectDelay = Duration.ofSeconds(reconnectSeconds);
+        this.enrichmentExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "adsb-enricher");
+            t.setDaemon(true);
+            return t;
+        });
+        this.enrichment = createEnrichmentService();
         log.info("Dump1090DataSource configured for {}:{}", host, port);
+    }
+    
+    private static AircraftEnrichmentService createEnrichmentService() {
+        try {
+            return new AircraftEnrichmentService();
+        } catch (Exception e) {
+            log.warn("Failed to initialize enrichment service: {}", e.getMessage());
+            return null;
+        }
     }
     
     @Override
@@ -87,6 +107,7 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
             log.info("Stopping Dump1090DataSource...");
             disconnect();
             stopCleanupTask();
+            stopEnrichmentExecutor();
             aircraftMap.clear();
         }
     }
@@ -187,17 +208,36 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
         
         // Use hex_ident as unique key
         String key = msg.hexIdent();
+        boolean isNew = !aircraftMap.containsKey(key);
         
-        AircraftState state = aircraftMap.computeIfAbsent(key, k -> {
-            AircraftState newState = new AircraftState(msg.hexIdent());
-            notifyAircraftDetected(newState);
-            return newState;
-        });
+        AircraftState state = aircraftMap.computeIfAbsent(key, k -> new AircraftState(msg.hexIdent()));
         
+        boolean hadCallsign = state.hasCallsign();
         boolean updated = state.update(msg);
-        if (updated) {
+        
+        if (isNew || (!hadCallsign && state.hasCallsign())) {
+            // New aircraft OR just got its callsign for the first time - enrich type info
+            enrichAircraft(state);
+            notifyAircraftDetected(state);
+        } else if (updated) {
             notifyAircraftUpdated(state);
         }
+    }
+    
+    private void enrichAircraft(AircraftState state) {
+        if (enrichment == null) return;
+        enrichmentExecutor.submit(() -> {
+            try {
+                var info = enrichment.lookup(state.hexIdent);
+                if (info.isKnown()) {
+                    state.setAircraftInfo(info);
+                    // Re-notify with enriched data if it's now a known type
+                    notifyAircraftUpdated(state);
+                }
+            } catch (Exception e) {
+                log.debug("Enrichment failed for {}: {}", state.hexIdent, e.getMessage());
+            }
+        });
     }
     
     private void startCleanupTask() {
@@ -227,6 +267,23 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
                 cleanupExecutor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
+        }
+    }
+    
+    private void stopEnrichmentExecutor() {
+        if (enrichmentExecutor != null) {
+            enrichmentExecutor.shutdown();
+            try {
+                if (!enrichmentExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    enrichmentExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                enrichmentExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (enrichment != null) {
+            enrichment.close();
         }
     }
     
@@ -329,14 +386,17 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
      * Internal class to track the state of an aircraft from multiple messages.
      */
     private static class AircraftState {
-        private final String hexIdent;
+        final String hexIdent;
         private volatile String callsign;
         private volatile Integer altitude;
         private volatile Integer speed;
         private volatile Integer heading;
         private volatile Double latitude;
         private volatile Double longitude;
-        private volatile String aircraftType;  // From callsign prefix or external DB
+        private volatile String aircraftType;  // From enrichment service
+        private volatile String aircraftDesc;
+        private volatile String registration;
+        private volatile String operator;
         private volatile Instant firstSeen;
         private volatile Instant lastSeen;
         
@@ -393,13 +453,29 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
         Flight toFlight() {
             if (callsign == null) return null;
             
-            // Try to determine aircraft type from callsign prefix or use UNKNOWN
-            String acType = aircraftType != null ? aircraftType : "UNKNOWN";
+            // Use enriched type if available, otherwise callsign prefix guess, otherwise UNKNOWN
+            String acType = aircraftType != null && !aircraftType.isEmpty() ? aircraftType :
+                    (aircraftDesc != null && !aircraftDesc.isEmpty() ? aircraftDesc : "UNKNOWN");
             
-            // Format altitude as time string for compatibility (or use actual timestamp)
             LocalDateTime scheduledTime = LocalDateTime.now();
-            
-            return new Flight(callsign, hexIdent, acType, scheduledTime);
+            return new Flight(callsign, hexIdent, acType, scheduledTime, altitude, speed);
+        }
+        
+        void setAircraftInfo(AircraftEnrichmentService.AircraftInfo info) {
+            if (info != null) {
+                if (info.icaoType() != null && !info.icaoType().isEmpty()) {
+                    this.aircraftType = info.icaoType();
+                }
+                if (info.description() != null && !info.description().isEmpty()) {
+                    this.aircraftDesc = info.description();
+                }
+                if (info.registration() != null && !info.registration().isEmpty()) {
+                    this.registration = info.registration();
+                }
+                if (info.operator() != null && !info.operator().isEmpty()) {
+                    this.operator = info.operator();
+                }
+            }
         }
         
         @Override

@@ -6,8 +6,15 @@ public record Flight(
         String flightNumber,
         String origin,
         String aircraft,
-        LocalDateTime scheduledTime
+        LocalDateTime scheduledTime,
+        Integer altitude,
+        Integer speed
 ) {
+    
+    /** Convenience constructor for scraped flights without ADS-B data */
+    public Flight(String flightNumber, String origin, String aircraft, LocalDateTime scheduledTime) {
+        this(flightNumber, origin, aircraft, scheduledTime, null, null);
+    }
     
     /**
      * Get a unique identifier for deduplication
