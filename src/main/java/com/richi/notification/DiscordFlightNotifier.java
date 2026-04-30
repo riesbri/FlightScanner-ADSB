@@ -20,7 +20,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
 
     private enum Category {
         MILITARY("\uD83E\uDE96", 10181046, "MILITARY"),        // 🪖
-        WIDEBODY("\uD83D\uDEEC", 15158332, "WIDEBODY"),        // 🛬
+        WIDEBODY("\uD83D\uDEEB", 15158332, "WIDEBODY"),        // 🛫
         BIZJET  ("\uD83D\uDEE9", 15844367, "BIZJET"),          // 🛩️
         COMMERCIAL("\u2708\uFE0F", 3447003, "");               // ✈️
 
@@ -105,7 +105,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
         if (!enabled || flights.isEmpty()) return;
         var objects = flights.stream().map(this::buildEmbedObject).toArray(String[]::new);
         String payload = String.format(
-            "{\"content\": \"\uD83D\uDEEC **%d new flights detected!**\", \"embeds\": [%s]}",
+            "{\"content\": \"\uD83D\uDEEB **%d new flights detected!**\", \"embeds\": [%s]}",
             flights.size(), String.join(",", objects));
         sendWebhook(payload);
     }
