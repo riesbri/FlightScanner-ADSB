@@ -21,7 +21,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
     private enum Category {
         MILITARY("\uD83E\uDE96", 10181046, "MILITARY"),        // 🪖
         WIDEBODY("\uD83D\uDEEC", 15158332, "WIDEBODY"),        // 🛬
-        BIZJET  ("\uD83D\uDE8E", 15844367, "BIZJET"),          // 🛩️
+        BIZJET  ("\uD83D\uDEE9", 15844367, "BIZJET"),          // 🛩️
         COMMERCIAL("\u2708\uFE0F", 3447003, "");               // ✈️
 
         final String emoji;
