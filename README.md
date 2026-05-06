@@ -72,7 +72,7 @@ systemctl --user restart flightscanner
 |-------|----------|----------|
 | ✈️ | Commercial | A320, B738, E190, CRJ2 |
 | 🛩️ | Business jet | GLEX, C56X, E55P, CL60 |
-| 🛬 | Widebody | A330, B777, B787, A350, A380 |
+| 🛫 | Widebody | A330, B777, B787, A350, A380 |
 | 🪖 | Military | A400, C130, F16, E3TF |
 
 ## Databases
