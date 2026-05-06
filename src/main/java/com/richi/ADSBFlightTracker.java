@@ -177,9 +177,9 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     public void onAircraftDetected(Flight flight) {
         log.info("🛬 New aircraft detected: {} ({})", flight.flightNumber(), flight.aircraft());
         
-        // Notify if interesting, or if notify-all mode is enabled
-        if (config.isDiscordNotifyAll() || analyzer.isWidebody(flight.aircraft())) {
-            String reason = config.isDiscordNotifyAll() ? "Aircraft detected (all mode)" : "Widebody detected";
+        // Notify if interesting (widebody/military/bizjet), or if notify-all mode is enabled
+        if (config.isDiscordNotifyAll() || analyzer.isInteresting(flight.aircraft())) {
+            String reason = config.isDiscordNotifyAll() ? "Aircraft detected (all mode)" : "Interesting aircraft detected";
             maybeNotify(flight, reason);
         }
     }
