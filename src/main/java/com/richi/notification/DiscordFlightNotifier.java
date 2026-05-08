@@ -1,5 +1,6 @@
 package com.richi.notification;
 
+import com.richi.analyzer.AircraftTypes;
 import com.richi.config.ConfigManager;
 import com.richi.model.Flight;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +12,6 @@ import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 public class DiscordFlightNotifier implements FlightNotifier {
@@ -39,37 +39,6 @@ public class DiscordFlightNotifier implements FlightNotifier {
             return emoji + " " + flightNumber + " [" + label + "]";
         }
     }
-
-    private static final Set<String> MILITARY_TYPES = Set.of(
-        "A400","C130","C17","C5M","C5","C141","C160","CN35","CN95",
-        "E3TF","E737","EUFI","F15","F16","F18","F22","F35","F4","F5",
-        "H47","H53","H60","H64","K35R","KC10","KC135","KC46",
-        "P3","P8","R135","SU27","SU30","SU35","SU57",
-        "T38","TOR","TU95","U2","V22"
-    );
-
-    private static final Set<String> WIDEBODY_TYPES = Set.of(
-        "B747","B748","B74R","B767","B763","B764",
-        "B777","B772","B773","B77W","B77L","B77F",
-        "B787","B788","B789","B78X",
-        "A330","A332","A333","A337","A338","A339",
-        "A340","A342","A343","A345","A346",
-        "A350","A359","A35K",
-        "A380","A388",
-        "MD11","MD1F","IL96","IL76","AN124","AN22","AN225"
-    );
-
-    private static final Set<String> BIZJET_TYPES = Set.of(
-        "C25A","C25B","C25C","C510","C525","C550","C560",
-        "C56X","C680","C700","C750","CL30","CL35","CL60",
-        "E35L","E50P","E55P","E545","E550","FA50","FA7X",
-        "FA8X","F2TH","F900","G150","G200","G280","GALX",
-        "GL5T","GL6T","GL7T","GLF4","GLF5","GLF6","GLEX",
-        "H25B","H25C","HA4T","HDJT","LJ35","LJ40","LJ45",
-        "LJ55","LJ60","LJ70","LJ75","LJ85","PRM1","PC12",
-        "PC24","SF50","TBM7","TBM8","TBM9","BE40","BE20",
-        "BE9L","BE9T","P180","PAY1","PAY2","PAY3","PAY4"
-    );
 
     // ── Instance ────────────────────────────────────────────────────
 
@@ -175,9 +144,9 @@ public class DiscordFlightNotifier implements FlightNotifier {
     }
 
     private Category classify(String type) {
-        if (MILITARY_TYPES.contains(type)) return Category.MILITARY;
-        if (WIDEBODY_TYPES.contains(type)) return Category.WIDEBODY;
-        if (BIZJET_TYPES.contains(type)) return Category.BIZJET;
+        if (AircraftTypes.MILITARY.contains(type)) return Category.MILITARY;
+        if (AircraftTypes.WIDEBODY.contains(type)) return Category.WIDEBODY;
+        if (AircraftTypes.BIZJET.contains(type)) return Category.BIZJET;
         return Category.COMMERCIAL;
     }
 
