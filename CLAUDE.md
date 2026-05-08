@@ -44,6 +44,17 @@ Notable runtime toggles:
 
 `ConfigManager.validate()` enforces required values when the corresponding feature is enabled (e.g. webhook URL when `discord.enabled=true`).
 
+## dump1090-fa (external dependency)
+
+The tracker assumes dump1090-fa is already running locally and exposing the SBS (BaseStation) feed on TCP 30003. Quick checks:
+
+```bash
+nc -zv localhost 30003          # is the port up?
+nc localhost 30003 | head -3    # do messages flow? expect lines like: MSG,3,...
+```
+
+If SBS output isn't enabled, set `NET_SBS_OUTPUT_PORT=30003` in `/etc/default/dump1090-fa` and `sudo systemctl restart dump1090-fa`.
+
 ## Architecture
 
 Two top-level entry points, sharing the rest of the code:
