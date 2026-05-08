@@ -113,4 +113,3 @@ These exist outside the Maven build and are not in `target/`:
 - When changing aircraft classification, edit **both** `LocalAircraftAnalyzer.java` and `DiscordFlightNotifier.java` — the type sets are duplicated.
 - `ADSBFlightTracker.cleanupNotifiedFlights` clears the entire cooldown set every hour rather than tracking per-entry timestamps. If you need true per-flight cooldowns, rework that method (and `notifiedFlights`'s value type).
 - Lombok is used (`@Slf4j`, `@Getter`). The compiler plugin is configured with the annotation processor; ensure your IDE has Lombok support enabled.
-- AGENTS.md documents an older project layout (e.g. `notification/TelegramFlightNotifier`, `service/FlightScraperService` paths) — trust the actual filesystem over AGENTS.md when they disagree.
