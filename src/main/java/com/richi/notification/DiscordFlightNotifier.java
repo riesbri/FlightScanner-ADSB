@@ -38,6 +38,15 @@ public class DiscordFlightNotifier implements FlightNotifier {
             if (label.isEmpty()) return emoji + " " + flightNumber;
             return emoji + " " + flightNumber + " [" + label + "]";
         }
+
+        static Category from(AircraftTypes.AircraftCategory category) {
+            return switch (category) {
+                case MILITARY -> MILITARY;
+                case WIDEBODY -> WIDEBODY;
+                case BIZJET -> BIZJET;
+                case COMMERCIAL -> COMMERCIAL;
+            };
+        }
     }
 
     // ── Instance ────────────────────────────────────────────────────
@@ -144,10 +153,9 @@ public class DiscordFlightNotifier implements FlightNotifier {
     }
 
     private Category classify(String type) {
-        if (AircraftTypes.MILITARY.contains(type)) return Category.MILITARY;
-        if (AircraftTypes.WIDEBODY.contains(type)) return Category.WIDEBODY;
-        if (AircraftTypes.BIZJET.contains(type)) return Category.BIZJET;
-        return Category.COMMERCIAL;
+        // Delegate to the single source of truth so the embed emoji matches
+        // LocalAircraftAnalyzer's "interesting?" decision (handles B777-300ER etc).
+        return Category.from(AircraftTypes.classify(type));
     }
 
     private String escapeJson(String text) {

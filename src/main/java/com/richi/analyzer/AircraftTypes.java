@@ -52,4 +52,46 @@ public final class AircraftTypes {
     );
 
     private AircraftTypes() {}
+
+    /** Coarse classification of an aircraft by its ICAO type code. */
+    public enum AircraftCategory {
+        COMMERCIAL, WIDEBODY, MILITARY, BIZJET
+    }
+
+    /**
+     * Classify a (possibly messy) aircraft type code into a single category.
+     * This is the one place the normalize-then-prefix-match logic lives;
+     * both LocalAircraftAnalyzer and DiscordFlightNotifier delegate here so
+     * "is this interesting?" and the Discord embed emoji can never disagree.
+     */
+    public static AircraftCategory classify(String aircraftType) {
+        if (aircraftType == null || aircraftType.isEmpty() || "UNKNOWN".equalsIgnoreCase(aircraftType)) {
+            return AircraftCategory.COMMERCIAL;
+        }
+        String normalized = normalize(aircraftType);
+        if (matches(MILITARY, normalized)) return AircraftCategory.MILITARY;
+        if (matches(WIDEBODY, normalized)) return AircraftCategory.WIDEBODY;
+        if (matches(BIZJET, normalized)) return AircraftCategory.BIZJET;
+        return AircraftCategory.COMMERCIAL;
+    }
+
+    private static boolean matches(Set<String> set, String normalized) {
+        if (set.contains(normalized)) {
+            return true;
+        }
+        // Prefix match in either direction (e.g. "B777-300ER" → "B773", "F1" → "F16")
+        return set.stream().anyMatch(t -> normalized.startsWith(t) || t.startsWith(normalized));
+    }
+
+    private static String normalize(String code) {
+        return code.toUpperCase()
+                   .replace("-", "")
+                   .replace(" ", "")
+                   .replace("BOEING", "B")
+                   .replace("AIRBUS", "A")
+                   .replace("B777", "B77")  // Normalize variants
+                   .replace("B787", "B78")
+                   .replace("A350", "A35")
+                   .trim();
+    }
 }

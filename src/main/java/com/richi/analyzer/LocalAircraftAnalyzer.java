@@ -48,43 +48,20 @@ public class LocalAircraftAnalyzer implements AircraftAnalyzerService {
     
     @Override
     public boolean isWidebody(String aircraftType) {
-        if (aircraftType == null || aircraftType.isEmpty() || "UNKNOWN".equals(aircraftType)) {
-            return false;
-        }
-        
-        String normalized = normalizeAircraftCode(aircraftType);
-        
-        // Direct match
-        if (AircraftTypes.WIDEBODY.contains(normalized)) {
-            return true;
-        }
-        
-        // Prefix match (e.g., "B777-300ER" should match "B777")
-        return AircraftTypes.WIDEBODY.stream()
-                .anyMatch(widebody -> normalized.startsWith(widebody) || widebody.startsWith(normalized));
+        return AircraftTypes.classify(aircraftType) == AircraftTypes.AircraftCategory.WIDEBODY;
     }
-    
+
     @Override
     public boolean isInteresting(String aircraftType) {
         return isWidebody(aircraftType) || isMilitary(aircraftType) || isBizjet(aircraftType);
     }
 
     public boolean isMilitary(String aircraftType) {
-        if (aircraftType == null || aircraftType.isEmpty() || "UNKNOWN".equals(aircraftType)) {
-            return false;
-        }
-        String normalized = normalizeAircraftCode(aircraftType);
-        return AircraftTypes.MILITARY.contains(normalized)
-                || AircraftTypes.MILITARY.stream().anyMatch(t -> normalized.startsWith(t) || t.startsWith(normalized));
+        return AircraftTypes.classify(aircraftType) == AircraftTypes.AircraftCategory.MILITARY;
     }
 
     public boolean isBizjet(String aircraftType) {
-        if (aircraftType == null || aircraftType.isEmpty() || "UNKNOWN".equals(aircraftType)) {
-            return false;
-        }
-        String normalized = normalizeAircraftCode(aircraftType);
-        return AircraftTypes.BIZJET.contains(normalized)
-                || AircraftTypes.BIZJET.stream().anyMatch(t -> normalized.startsWith(t) || t.startsWith(normalized));
+        return AircraftTypes.classify(aircraftType) == AircraftTypes.AircraftCategory.BIZJET;
     }
 
     @Override
@@ -105,17 +82,5 @@ public class LocalAircraftAnalyzer implements AircraftAnalyzerService {
         return flights.stream()
                 .filter(f -> interestingNumbers.contains(f.flightNumber()))
                 .toList();
-    }
-    
-    private String normalizeAircraftCode(String code) {
-        return code.toUpperCase()
-                   .replace("-", "")
-                   .replace(" ", "")
-                   .replace("BOEING", "B")
-                   .replace("AIRBUS", "A")
-                   .replace("B777", "B77")  // Normalize variants
-                   .replace("B787", "B78")
-                   .replace("A350", "A35")
-                   .trim();
     }
 }
