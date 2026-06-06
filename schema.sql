@@ -1,8 +1,8 @@
-CREATE TABLE IF NOT EXISTS flights (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    flight_number VARCHAR(10) NOT NULL,
-    origin VARCHAR(4) NOT NULL,
-    aircraft VARCHAR(50) NOT NULL,
-    scheduled_time DATETIME NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- NOTE: This file is not used by the application.
+--
+-- The real schema is created at runtime by SqlFlightRepository.initialize()
+-- (src/main/java/com/richi/repository/SqlFlightRepository.java), which emits
+-- dialect-specific DDL for the configured db.type (SQLite by default, MySQL
+-- optionally) and migrates existing databases via ALTER TABLE ADD COLUMN.
+--
+-- Edit that method, not this file, when changing the flights table.
