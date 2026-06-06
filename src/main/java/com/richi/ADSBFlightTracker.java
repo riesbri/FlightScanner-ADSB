@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -39,8 +39,8 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     private final ScheduledExecutorService executor;
     private final AtomicBoolean running = new AtomicBoolean(false);
     
-    // Track which flights we've already notified about to avoid spam
-    private final Set<String> notifiedFlights = ConcurrentHashMap.newKeySet();
+    // Track when we last notified about each flight key, to enforce a real cooldown
+    private final Map<String, Instant> notifiedFlights = new ConcurrentHashMap<>();
     private final Duration notificationCooldown;
     
     public ADSBFlightTracker() {
@@ -209,26 +209,32 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     
     private void maybeNotify(Flight flight, String reason) {
         String key = flight.getUniqueKey();
-        
-        // Check cooldown
-        if (notifiedFlights.contains(key)) {
+        Instant now = Instant.now();
+
+        // Enforce a real per-key cooldown: skip if we notified within the window
+        Instant last = notifiedFlights.get(key);
+        if (last != null && Duration.between(last, now).compareTo(notificationCooldown) < 0) {
             log.debug("Skipping notification for {} (cooldown active)", flight.flightNumber());
             return;
         }
-        
-        // Send notification
+
+        // Send notification and record the timestamp
         notifier.sendAlert(flight);
-        notifiedFlights.add(key);
-        
+        notifiedFlights.put(key, now);
+
         log.info("📱 Notification sent for {}: {}", flight.flightNumber(), reason);
     }
-    
+
     private void cleanupNotifiedFlights() {
-        // In a production app, you'd track timestamps and remove entries older than cooldown
-        // For simplicity, we just clear the set periodically
-        int size = notifiedFlights.size();
-        notifiedFlights.clear();
-        log.debug("Cleared {} entries from notification cooldown cache", size);
+        // Prune entries whose cooldown has fully expired so the map doesn't grow unbounded.
+        // The cooldown decision itself lives in maybeNotify; this is just memory hygiene.
+        Instant cutoff = Instant.now().minus(notificationCooldown);
+        int before = notifiedFlights.size();
+        notifiedFlights.values().removeIf(last -> last.isBefore(cutoff));
+        int removed = before - notifiedFlights.size();
+        if (removed > 0) {
+            log.debug("Pruned {} expired entries from notification cooldown cache", removed);
+        }
     }
     
     private void logStats() {
