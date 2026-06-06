@@ -141,7 +141,10 @@ public class SqlFlightRepository implements FlightRepository {
             pstmt.setString(1, flight.flightNumber());
             pstmt.setString(2, flight.origin());
             pstmt.setString(3, flight.aircraft());
-            pstmt.setTimestamp(4, Timestamp.valueOf(flight.scheduledTime()));
+            // Store as formatted text (not setTimestamp, which xerial persists as epoch-millis
+            // INTEGER) so DATE()/datetime() queries and the flightExists dedup actually match,
+            // and the value is human-readable in the db. See mapResultSetToFlight for the read.
+            pstmt.setString(4, flight.scheduledTime().format(formatter));
             pstmt.setObject(5, flight.altitude(), Types.INTEGER);
             pstmt.setObject(6, flight.speed(), Types.INTEGER);
 
