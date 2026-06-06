@@ -50,10 +50,28 @@ public class SqlFlightRepository implements FlightRepository {
         this.dataSource = new HikariDataSource(hikariConfig);
         log.info("Database connection pool initialized");
     }
-    
+
+    /**
+     * Build directly from a JDBC URL (used by tests, e.g. a temp SQLite file)
+     * without going through ConfigManager's singleton/global config.
+     */
+    public SqlFlightRepository(String jdbcUrl) {
+        HikariConfig hikariConfig = new HikariConfig();
+        hikariConfig.setJdbcUrl(jdbcUrl);
+        if (jdbcUrl.contains("sqlite")) {
+            hikariConfig.setDriverClassName("org.sqlite.JDBC");
+            hikariConfig.setConnectionTestQuery("SELECT 1");
+        } else {
+            hikariConfig.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        }
+        hikariConfig.setMaximumPoolSize(2);
+        this.dataSource = new HikariDataSource(hikariConfig);
+        log.info("Database connection pool initialized (direct JDBC URL)");
+    }
+
     @Override
     public void initialize() throws SQLException {
-        String sql = isSQLite() ? 
+        String sql = isSQLite() ?
             """
             CREATE TABLE IF NOT EXISTS flights (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +79,8 @@ public class SqlFlightRepository implements FlightRepository {
                 origin VARCHAR(4) NOT NULL,
                 aircraft VARCHAR(50) NOT NULL,
                 scheduled_time DATETIME NOT NULL,
+                altitude INTEGER,
+                speed INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(flight_number, scheduled_time)
             )
@@ -72,15 +92,33 @@ public class SqlFlightRepository implements FlightRepository {
                 origin VARCHAR(4) NOT NULL,
                 aircraft VARCHAR(50) NOT NULL,
                 scheduled_time DATETIME NOT NULL,
+                altitude INT,
+                speed INT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE KEY unique_flight (flight_number, scheduled_time)
             )
             """;
-        
+
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.executeUpdate(sql);
+            // CREATE TABLE handles fresh DBs; pre-existing flights.db tables predate
+            // the altitude/speed columns, so add them in-place. ADD COLUMN throws if
+            // the column already exists — that's the expected steady state, so swallow it.
+            addColumnIfMissing(conn, "altitude");
+            addColumnIfMissing(conn, "speed");
             log.info("Database schema initialized");
+        }
+    }
+
+    private void addColumnIfMissing(Connection conn, String column) {
+        String type = isSQLite() ? "INTEGER" : "INT";
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("ALTER TABLE flights ADD COLUMN " + column + " " + type);
+            log.info("Added missing column '{}' to flights table", column);
+        } catch (SQLException e) {
+            // Column already exists (normal case) — nothing to do.
+            log.debug("Column '{}' already present: {}", column, e.getMessage());
         }
     }
     
@@ -94,17 +132,19 @@ public class SqlFlightRepository implements FlightRepository {
         }
         
         String sql = isSQLite() ?
-            "INSERT INTO flights (flight_number, origin, aircraft, scheduled_time) VALUES (?, ?, ?, ?)" :
-            "INSERT IGNORE INTO flights (flight_number, origin, aircraft, scheduled_time) VALUES (?, ?, ?, ?)";
-        
+            "INSERT INTO flights (flight_number, origin, aircraft, scheduled_time, altitude, speed) VALUES (?, ?, ?, ?, ?, ?)" :
+            "INSERT IGNORE INTO flights (flight_number, origin, aircraft, scheduled_time, altitude, speed) VALUES (?, ?, ?, ?, ?, ?)";
+
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+
             pstmt.setString(1, flight.flightNumber());
             pstmt.setString(2, flight.origin());
             pstmt.setString(3, flight.aircraft());
             pstmt.setTimestamp(4, Timestamp.valueOf(flight.scheduledTime()));
-            
+            pstmt.setObject(5, flight.altitude(), Types.INTEGER);
+            pstmt.setObject(6, flight.speed(), Types.INTEGER);
+
             int affected = pstmt.executeUpdate();
             boolean inserted = affected > 0;
             
@@ -236,7 +276,9 @@ public class SqlFlightRepository implements FlightRepository {
                 rs.getString("flight_number"),
                 rs.getString("origin"),
                 rs.getString("aircraft"),
-                rs.getTimestamp("scheduled_time").toLocalDateTime()
+                rs.getTimestamp("scheduled_time").toLocalDateTime(),
+                (Integer) rs.getObject("altitude"),
+                (Integer) rs.getObject("speed")
         );
     }
     
