@@ -86,6 +86,7 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
             executor.scheduleAtFixedRate(this::persistFlights, saveInterval, saveInterval, TimeUnit.MINUTES);
             executor.scheduleAtFixedRate(this::logStats, 30, 30, TimeUnit.SECONDS);
             executor.scheduleAtFixedRate(this::cleanupNotifiedFlights, 1, 1, TimeUnit.HOURS);
+            executor.scheduleAtFixedRate(notifier::flushCoalescedSummary, 60, 60, TimeUnit.SECONDS);
 
             log.info("ADSBFlightTracker started (notify level: {}). Listening for aircraft...",
                     config.getNotifyLevel());

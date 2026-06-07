@@ -58,6 +58,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
     private final boolean enabled;
     private final boolean startupTestMessage;
     private final CloseableHttpClient httpClient;
+    private final DiscordRateLimiter rateLimiter;
 
     public DiscordFlightNotifier() {
         this(ConfigManager.getInstance());
@@ -68,6 +69,9 @@ public class DiscordFlightNotifier implements FlightNotifier {
         this.webhookUrl = config.getDiscordWebhookUrl();
         this.startupTestMessage = config.isStartupTestMessage();
         this.httpClient = HttpClients.createDefault();
+        int ratePerMin = config.getInt("discord.rate.limit.per.minute", 10);
+        boolean coalesce = config.getBoolean("discord.rate.coalesce.enabled", true);
+        this.rateLimiter = new DiscordRateLimiter(ratePerMin, coalesce);
         if (enabled) {
             log.info("Discord notifier initialized");
             if (!testConnection()) log.warn("Discord connection test failed");
@@ -79,6 +83,15 @@ public class DiscordFlightNotifier implements FlightNotifier {
     @Override
     public void sendAlert(Flight flight) {
         if (!enabled) return;
+        if (!rateLimiter.tryAcquire()) {
+            if (rateLimiter.isCoalesceEnabled()) {
+                int n = rateLimiter.recordCoalesced();
+                log.debug("Rate limit: coalescing {} (total queued: {})", flight.flightNumber(), n);
+            } else {
+                log.debug("Rate limit: dropped notification for {} (coalesce disabled)", flight.flightNumber());
+            }
+            return;
+        }
         String payload = String.format("{\"embeds\": [%s]}", buildEmbedObject(flight));
         sendWebhook(payload);
     }
@@ -86,9 +99,26 @@ public class DiscordFlightNotifier implements FlightNotifier {
     @Override
     public void sendCriticalAlert(Flight flight) {
         if (!enabled) return;
-        // ALERT embeds are never batched — always sent individually with the ALERT category
+        // ALERT embeds bypass the rate limiter — they are rare and critical
         String payload = String.format("{\"embeds\": [%s]}", buildAlertEmbedObject(flight));
         sendWebhook(payload);
+    }
+
+    @Override
+    public void flushCoalescedSummary() {
+        if (!enabled) return;
+        int count = rateLimiter.takeCoalescedCount();
+        if (count == 0) return;
+        String time = java.time.LocalTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String payload = String.format(
+                "{\"embeds\": [{\"title\": \"📊 +%d more flights detected in the last minute (rate limited)\","
+                + " \"color\": 9807270,"
+                + " \"fields\": [{\"name\": \"Time\", \"value\": \"%s\", \"inline\": true}],"
+                + " \"footer\": {\"text\": \"FlightTracker ADS-B\"}}]}",
+                count, time);
+        sendWebhook(payload);
+        log.info("Flushed coalesced summary: {} rate-limited flights", count);
     }
 
     @Override

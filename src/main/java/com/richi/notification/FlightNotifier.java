@@ -17,4 +17,11 @@ public interface FlightNotifier {
 
     /** Test the notification connection. */
     boolean testConnection();
+
+    /**
+     * Post a single "📊 +N more…" summary embed for any rate-limited overflow, then
+     * reset the counter.  No-op when there is nothing coalesced or the notifier is
+     * disabled.
+     */
+    default void flushCoalescedSummary() {}
 }
