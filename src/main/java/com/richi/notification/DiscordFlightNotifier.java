@@ -19,10 +19,11 @@ public class DiscordFlightNotifier implements FlightNotifier {
     // ── Category definitions ────────────────────────────────────────
 
     private enum Category {
-        MILITARY("\uD83E\uDE96", 10181046, "MILITARY"),        // 🪖
-        WIDEBODY("\uD83D\uDEEB", 15158332, "WIDEBODY"),        // 🛫
-        BIZJET  ("\uD83D\uDEE9", 15844367, "BIZJET"),          // 🛩️
-        COMMERCIAL("\u2708\uFE0F", 3447003, "");               // ✈️
+        ALERT    ("🚨", 16711680, ""),       // 🚨  danger red (0xFF0000)
+        MILITARY ("🪖", 10181046, "MILITARY"),// 🪖
+        WIDEBODY ("🛫", 15158332, "WIDEBODY"),// 🛫
+        BIZJET   ("🛩", 15844367, "BIZJET"),  // 🛩️
+        COMMERCIAL("✈️", 3447003,  "");       // ✈️
 
         final String emoji;
         final int color;
@@ -35,15 +36,17 @@ public class DiscordFlightNotifier implements FlightNotifier {
         }
 
         String title(String flightNumber) {
+            if (this == ALERT) return emoji + " AIRCRAFT ALERT — " + flightNumber;
             if (label.isEmpty()) return emoji + " " + flightNumber;
             return emoji + " " + flightNumber + " [" + label + "]";
         }
 
         static Category from(AircraftTypes.AircraftCategory category) {
             return switch (category) {
-                case MILITARY -> MILITARY;
-                case WIDEBODY -> WIDEBODY;
-                case BIZJET -> BIZJET;
+                case ALERT     -> ALERT;
+                case MILITARY  -> MILITARY;
+                case WIDEBODY  -> WIDEBODY;
+                case BIZJET    -> BIZJET;
                 case COMMERCIAL -> COMMERCIAL;
             };
         }
@@ -53,6 +56,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
 
     private final String webhookUrl;
     private final boolean enabled;
+    private final boolean startupTestMessage;
     private final CloseableHttpClient httpClient;
 
     public DiscordFlightNotifier() {
@@ -62,6 +66,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
     public DiscordFlightNotifier(ConfigManager config) {
         this.enabled = config.isDiscordEnabled();
         this.webhookUrl = config.getDiscordWebhookUrl();
+        this.startupTestMessage = config.isStartupTestMessage();
         this.httpClient = HttpClients.createDefault();
         if (enabled) {
             log.info("Discord notifier initialized");
@@ -79,11 +84,19 @@ public class DiscordFlightNotifier implements FlightNotifier {
     }
 
     @Override
+    public void sendCriticalAlert(Flight flight) {
+        if (!enabled) return;
+        // ALERT embeds are never batched — always sent individually with the ALERT category
+        String payload = String.format("{\"embeds\": [%s]}", buildAlertEmbedObject(flight));
+        sendWebhook(payload);
+    }
+
+    @Override
     public void sendBatchAlert(List<Flight> flights) {
         if (!enabled || flights.isEmpty()) return;
         var objects = flights.stream().map(this::buildEmbedObject).toArray(String[]::new);
         String payload = String.format(
-            "{\"content\": \"\uD83D\uDEEB **%d new flights detected!**\", \"embeds\": [%s]}",
+            "{\"content\": \"🛫 **%d new flights detected!**\", \"embeds\": [%s]}",
             flights.size(), String.join(",", objects));
         sendWebhook(payload);
     }
@@ -91,7 +104,11 @@ public class DiscordFlightNotifier implements FlightNotifier {
     @Override
     public boolean testConnection() {
         if (!enabled) return false;
-        return doPost("{\"content\": \"\u2705 FlightTracker connected to Discord!\"}", "connection test");
+        if (!startupTestMessage) {
+            log.debug("Startup test message suppressed (discord.startup.test.message=false)");
+            return true;
+        }
+        return doPost("{\"content\": \"✅ FlightTracker connected to Discord!\"}", "connection test");
     }
 
     private void sendWebhook(String payload) {
@@ -125,11 +142,11 @@ public class DiscordFlightNotifier implements FlightNotifier {
 
     private String buildEmbedObject(Flight flight) {
         String type = flight.aircraft() != null ? flight.aircraft().toUpperCase() : "UNKNOWN";
-        Category cat = classify(type);
-        
+        Category cat = Category.from(AircraftTypes.classify(type));
+
         String altStr = flight.altitude() != null ? String.format("%d ft", flight.altitude()) : "N/A";
-        String spdStr = flight.speed() != null ? String.format("%d kts", flight.speed()) : "N/A";
-        
+        String spdStr = flight.speed()    != null ? String.format("%d kts", flight.speed())   : "N/A";
+
         return String.format("""
                 {
                   "title": "%s",
@@ -137,8 +154,8 @@ public class DiscordFlightNotifier implements FlightNotifier {
                   "fields": [
                     {"name": "Aircraft", "value": "%s", "inline": true},
                     {"name": "Altitude", "value": "%s", "inline": true},
-                    {"name": "Speed", "value": "%s", "inline": true},
-                    {"name": "Time", "value": "%s", "inline": true}
+                    {"name": "Speed",    "value": "%s", "inline": true},
+                    {"name": "Time",     "value": "%s", "inline": true}
                   ],
                   "footer": {"text": "FlightTracker ADS-B"}
                 }
@@ -152,10 +169,38 @@ public class DiscordFlightNotifier implements FlightNotifier {
         );
     }
 
-    private Category classify(String type) {
-        // Delegate to the single source of truth so the embed emoji matches
-        // LocalAircraftAnalyzer's "interesting?" decision (handles B777-300ER etc).
-        return Category.from(AircraftTypes.classify(type));
+    /** Builds an ALERT-specific embed with squawk shown prominently. */
+    private String buildAlertEmbedObject(Flight flight) {
+        String type     = flight.aircraft() != null ? flight.aircraft().toUpperCase() : "UNKNOWN";
+        String altStr   = flight.altitude() != null ? String.format("%d ft",  flight.altitude()) : "N/A";
+        String spdStr   = flight.speed()    != null ? String.format("%d kts", flight.speed())    : "N/A";
+        String squawk   = (flight.squawk() != null && !flight.squawk().isBlank()) ? flight.squawk() : "N/A";
+        String hexIdent = (flight.hexIdent() != null && !flight.hexIdent().isBlank()) ? flight.hexIdent() : "N/A";
+
+        return String.format("""
+                {
+                  "title": "%s",
+                  "color": %d,
+                  "fields": [
+                    {"name": "Aircraft",  "value": "%s", "inline": true},
+                    {"name": "Squawk",    "value": "%s", "inline": true},
+                    {"name": "Hex",       "value": "%s", "inline": true},
+                    {"name": "Altitude",  "value": "%s", "inline": true},
+                    {"name": "Speed",     "value": "%s", "inline": true},
+                    {"name": "Time",      "value": "%s", "inline": true}
+                  ],
+                  "footer": {"text": "FlightTracker ADS-B — ALERT"}
+                }
+                """,
+                escapeJson(Category.ALERT.title(flight.flightNumber())),
+                Category.ALERT.color,
+                escapeJson(type),
+                escapeJson(squawk),
+                escapeJson(hexIdent),
+                escapeJson(altStr),
+                escapeJson(spdStr),
+                flight.scheduledTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+        );
     }
 
     private String escapeJson(String text) {

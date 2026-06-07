@@ -3,19 +3,18 @@ package com.richi.notification;
 import com.richi.model.Flight;
 
 public interface FlightNotifier {
-    
-    /**
-     * Send a notification about an interesting flight
-     */
+
+    /** Send a NOTEWORTHY-tier notification embed for one flight. */
     void sendAlert(Flight flight);
-    
-    /**
-     * Send a batch notification about multiple flights
-     */
+
+    /** Send an ALERT-tier notification — always one-per-aircraft, never batched. */
+    default void sendCriticalAlert(Flight flight) {
+        sendAlert(flight);  // fallback for non-Discord notifiers
+    }
+
+    /** Send a batch notification about multiple flights. */
     void sendBatchAlert(java.util.List<Flight> flights);
-    
-    /**
-     * Test the notification connection
-     */
+
+    /** Test the notification connection. */
     boolean testConnection();
 }
