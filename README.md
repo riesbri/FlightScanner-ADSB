@@ -41,7 +41,6 @@ All in `src/main/resources/application.properties`:
 | `adsb.alert.gov.hex.ranges` | `0x348000-0x34FFFF` | Government ICAO hex ranges |
 | `adsb.alert.military.operators` | *list* | Military operator substrings |
 | `adsb.alert.cooldown.minutes` | `5` | Per-aircraft ALERT cooldown |
-| `ai.analysis.enabled` | `false` | DeepSeek AI (not currently used) |
 
 ## Notification Levels
 

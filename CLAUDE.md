@@ -62,8 +62,6 @@ Notable runtime toggles:
 - `adsb.alert.low.altitude.feet` — altitude threshold in feet (default 1500); airborne aircraft below this trigger ALERT.
 - `adsb.alert.gov.hex.ranges` — comma-separated ICAO hex ranges for government/state aircraft (e.g. `0x348000-0x34FFFF`).
 - `adsb.alert.military.operators` — comma-separated substrings matched case-insensitively against the enriched operator field.
-- `ai.analysis.enabled` / `deepseek.api.key` — DeepSeek fallback path in `LocalAircraftAnalyzer`. Currently disabled; the AI path is exercised only when local detection finds zero widebodies.
-
 `ConfigManager.validate()` enforces required values when the corresponding feature is enabled (e.g. webhook URL when `discord.enabled=true`).
 
 ## dump1090-fa (external dependency)
