@@ -81,6 +81,9 @@ public class SqlFlightRepository implements FlightRepository {
                 scheduled_time DATETIME NOT NULL,
                 altitude INTEGER,
                 speed INTEGER,
+                squawk TEXT,
+                hex_ident TEXT,
+                operator TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(flight_number, scheduled_time)
             )
@@ -94,6 +97,9 @@ public class SqlFlightRepository implements FlightRepository {
                 scheduled_time DATETIME NOT NULL,
                 altitude INT,
                 speed INT,
+                squawk VARCHAR(4),
+                hex_ident VARCHAR(6),
+                operator VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE KEY unique_flight (flight_number, scheduled_time)
             )
@@ -102,17 +108,19 @@ public class SqlFlightRepository implements FlightRepository {
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.executeUpdate(sql);
-            // CREATE TABLE handles fresh DBs; pre-existing flights.db tables predate
-            // the altitude/speed columns, so add them in-place. ADD COLUMN throws if
-            // the column already exists — that's the expected steady state, so swallow it.
-            addColumnIfMissing(conn, "altitude");
-            addColumnIfMissing(conn, "speed");
+            // ADD COLUMN is a no-op on fresh DBs (columns already in CREATE TABLE above).
+            // On pre-existing flights.db files the column may be missing — add it in-place.
+            // ADD COLUMN throws if the column already exists; swallow that case.
+            addColumnIfMissing(conn, "altitude", "INTEGER");
+            addColumnIfMissing(conn, "speed",    "INTEGER");
+            addColumnIfMissing(conn, "squawk",   "TEXT");
+            addColumnIfMissing(conn, "hex_ident","TEXT");
+            addColumnIfMissing(conn, "operator", "TEXT");
             log.info("Database schema initialized");
         }
     }
 
-    private void addColumnIfMissing(Connection conn, String column) {
-        String type = isSQLite() ? "INTEGER" : "INT";
+    private void addColumnIfMissing(Connection conn, String column, String type) {
         try (Statement stmt = conn.createStatement()) {
             stmt.executeUpdate("ALTER TABLE flights ADD COLUMN " + column + " " + type);
             log.info("Added missing column '{}' to flights table", column);
@@ -132,8 +140,8 @@ public class SqlFlightRepository implements FlightRepository {
         }
         
         String sql = isSQLite() ?
-            "INSERT INTO flights (flight_number, origin, aircraft, scheduled_time, altitude, speed) VALUES (?, ?, ?, ?, ?, ?)" :
-            "INSERT IGNORE INTO flights (flight_number, origin, aircraft, scheduled_time, altitude, speed) VALUES (?, ?, ?, ?, ?, ?)";
+            "INSERT INTO flights (flight_number, origin, aircraft, scheduled_time, altitude, speed, squawk, hex_ident, operator) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" :
+            "INSERT IGNORE INTO flights (flight_number, origin, aircraft, scheduled_time, altitude, speed, squawk, hex_ident, operator) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -147,6 +155,9 @@ public class SqlFlightRepository implements FlightRepository {
             pstmt.setString(4, flight.scheduledTime().format(formatter));
             pstmt.setObject(5, flight.altitude(), Types.INTEGER);
             pstmt.setObject(6, flight.speed(), Types.INTEGER);
+            pstmt.setString(7, flight.squawk());
+            pstmt.setString(8, flight.hexIdent());
+            pstmt.setString(9, flight.operator());
 
             int affected = pstmt.executeUpdate();
             boolean inserted = affected > 0;
@@ -281,7 +292,10 @@ public class SqlFlightRepository implements FlightRepository {
                 rs.getString("aircraft"),
                 rs.getTimestamp("scheduled_time").toLocalDateTime(),
                 (Integer) rs.getObject("altitude"),
-                (Integer) rs.getObject("speed")
+                (Integer) rs.getObject("speed"),
+                rs.getString("squawk"),
+                rs.getString("hex_ident"),
+                rs.getString("operator")
         );
     }
     
