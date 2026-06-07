@@ -62,6 +62,11 @@ Notable runtime toggles:
 - `adsb.alert.low.altitude.feet` — altitude threshold in feet (default 1500); airborne aircraft below this trigger ALERT.
 - `adsb.alert.gov.hex.ranges` — comma-separated ICAO hex ranges for government/state aircraft (e.g. `0x348000-0x34FFFF`).
 - `adsb.alert.military.operators` — comma-separated substrings matched case-insensitively against the enriched operator field.
+- `discord.rate.limit.per.minute` — max NOTEWORTHY/ROUTINE notifications per 60s window (default `10`). ALERT pings always bypass this limit.
+- `discord.rate.coalesce.enabled` — when `true` (default), overflow is coalesced into a single "📊 +N more…" embed posted every 60s; when `false`, overflow is dropped silently.
+- `airport.coordinates.lat` / `airport.coordinates.lon` — override the hardcoded airport table. Both must be set to take effect.
+- `airport.radius.nm` — proximity filter radius in nautical miles (default `100`). Only aircraft within this radius of the configured airport are notified/persisted.
+- `airport.filter.require-position` — when `true`, aircraft with no position yet are dropped; when `false` (default), positionless aircraft pass through.
 `ConfigManager.validate()` enforces required values when the corresponding feature is enabled (e.g. webhook URL when `discord.enabled=true`).
 
 ## dump1090-fa (external dependency)
@@ -101,8 +106,10 @@ Dump1090DataSource ── parses SBS via SBSMessage, maintains aircraftMap
      │
      ▼
 ADSBFlightTracker (ADSBListener)
-     ├── onAircraftDetected → LocalAircraftAnalyzer.isInteresting? → DiscordFlightNotifier
-     ├── every adsb.save.interval.minutes  → SqlFlightRepository.saveFlights
+     ├── onAircraftDetected → AirportCoords proximity filter → LocalAircraftAnalyzer.isInteresting? → DiscordFlightNotifier
+     │       (aircraft outside airport.radius.nm are dropped before notify OR persist)
+     ├── every adsb.save.interval.minutes  → SqlFlightRepository.saveFlights (only in-range flights)
+     ├── every 60s                         → DiscordFlightNotifier.flushCoalescedSummary (rate-limit overflow)
      └── every 1h                          → prunes expired entries from notifiedFlights cooldown map
 ```
 

@@ -41,6 +41,12 @@ All in `src/main/resources/application.properties`:
 | `adsb.alert.gov.hex.ranges` | `0x348000-0x34FFFF` | Government ICAO hex ranges |
 | `adsb.alert.military.operators` | *list* | Military operator substrings |
 | `adsb.alert.cooldown.minutes` | `5` | Per-aircraft ALERT cooldown |
+| `discord.rate.limit.per.minute` | `10` | Max NOTEWORTHY/ROUTINE notifications per 60s window. ALERT always bypasses. |
+| `discord.rate.coalesce.enabled` | `true` | Overflow becomes a single `📊 +N more…` embed per minute. |
+| `airport.code` | `VLC` | IATA code for the proximity filter. Drop-in: hardcoded Spanish airport table. |
+| `airport.coordinates.lat` / `airport.coordinates.lon` | *(commented)* | Override the hardcoded airport. Both must be set. |
+| `airport.radius.nm` | `100` | Aircraft outside this nautical-mile radius of the airport are dropped before notify/persist. |
+| `airport.filter.require-position` | `false` | When `true`, aircraft with no position yet are dropped. |
 
 ## Notification Levels
 
@@ -95,6 +101,12 @@ sed -i 's/discord.notify.level=noteworthy/discord.notify.level=alert/' \
 | 🪖 | Military type | Gold | A400, C130, F16, E3TF |
 | 🛩️ | Business jet | Amber | GLEX, C56X, E55P, CL60 |
 | ✈️ | Commercial | Blue | A320, B738, E190, CRJ2 |
+
+## Rate Limiting & Airport Filter
+
+**Rate limit:** NOTEWORTHY/ROUTINE pings are capped at `discord.rate.limit.per.minute` (default 10) per 60s rolling window. When the cap is hit, flights are coalesced into a single `📊 +N more…` embed posted every 60s. **ALERT tier always bypasses** the rate limit — a squawk 7700 or low-altitude alert goes through immediately, no coalescing, no queueing. This prevents notification spam when many planes enter the area at once (a take-off rush, an airshow practice window) while never silencing actual emergencies.
+
+**Airport filter:** Flights outside `airport.radius.nm` nautical miles of the configured airport are dropped before notification **and** before persistence — `flights.db` only contains in-range aircraft. The default `airport.code=VLC` is Valencia, hardcoded alongside MAD, BCN, SVQ, ALC in `geo/AirportCoords.java`. Override with `airport.coordinates.lat` / `airport.coordinates.lon` for any other location (both must be set). Set `airport.filter.require-position=true` to also drop aircraft that haven't broadcast a position yet.
 
 ## Databases
 
