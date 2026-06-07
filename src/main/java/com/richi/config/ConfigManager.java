@@ -36,6 +36,8 @@ public class ConfigManager {
     private final boolean discordEnabled;
     private final String discordWebhookUrl;
     private final boolean discordNotifyAll;
+    private final NotifyLevel notifyLevel;
+    private final boolean startupTestMessage;
     
     // AI settings
     private final boolean aiAnalysisEnabled;
@@ -81,6 +83,12 @@ public class ConfigManager {
         this.discordEnabled = getBoolean("discord.enabled", false);
         this.discordWebhookUrl = getString("discord.webhook.url", "");
         this.discordNotifyAll = getBoolean("discord.notify.all", false);
+        // Warn once at startup if the deprecated key is present in the file
+        if (properties.containsKey("discord.notify.all")) {
+            log.warn("discord.notify.all is deprecated; use discord.notify.level=all or discord.notify.level=noteworthy");
+        }
+        this.notifyLevel = NotifyLevel.parse(getString("discord.notify.level", "noteworthy"));
+        this.startupTestMessage = getBoolean("discord.startup.test.message", false);
         
         // AI
         this.aiAnalysisEnabled = getBoolean("ai.analysis.enabled", false);
@@ -176,6 +184,14 @@ public class ConfigManager {
     
     public boolean isDiscordNotifyAll() {
         return discordNotifyAll;
+    }
+
+    public NotifyLevel getNotifyLevel() {
+        return notifyLevel;
+    }
+
+    public boolean isStartupTestMessage() {
+        return startupTestMessage;
     }
     
     public boolean isAiAnalysisEnabled() {
