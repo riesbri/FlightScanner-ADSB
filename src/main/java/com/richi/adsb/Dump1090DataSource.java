@@ -1,6 +1,7 @@
 package com.richi.adsb;
 
 import com.richi.config.ConfigManager;
+import com.richi.geo.AirportCoords;
 import com.richi.model.Flight;
 import com.richi.service.AircraftEnrichmentService;
 import lombok.extern.slf4j.Slf4j;
@@ -311,10 +312,19 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
     
     @Override
     public List<Flight> getFlightsNearAirport(String airportCode, double radiusNm) {
-        // TODO: Implement airport position lookup and distance calculation
-        // For now, return all flights with positions
-        log.warn("Airport proximity filter not yet implemented, returning all flights");
-        return getCurrentFlights();
+        AirportCoords coords = AirportCoords.SPANISH_AIRPORTS.get(airportCode.toUpperCase());
+        if (coords == null) {
+            log.warn("Airport {} not in table — returning all flights with positions", airportCode);
+            return getCurrentFlights().stream()
+                    .filter(f -> f.latitude() != null && f.longitude() != null)
+                    .toList();
+        }
+        double aLat = coords.lat();
+        double aLon = coords.lon();
+        return getCurrentFlights().stream()
+                .filter(f -> f.latitude() != null && f.longitude() != null)
+                .filter(f -> AirportCoords.haversineNm(aLat, aLon, f.latitude(), f.longitude()) <= radiusNm)
+                .toList();
     }
     
     @Override
@@ -458,12 +468,12 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
         Flight toFlight() {
             if (callsign == null) return null;
 
-            // Use enriched type if available, otherwise description, otherwise UNKNOWN
             String acType = aircraftType != null && !aircraftType.isEmpty() ? aircraftType :
                     (aircraftDesc != null && !aircraftDesc.isEmpty() ? aircraftDesc : "UNKNOWN");
 
             LocalDateTime scheduledTime = LocalDateTime.now();
-            return new Flight(callsign, hexIdent, acType, scheduledTime, altitude, speed, squawk, hexIdent, operator);
+            return new Flight(callsign, hexIdent, acType, scheduledTime,
+                    altitude, speed, squawk, hexIdent, operator, latitude, longitude);
         }
         
         void setAircraftInfo(AircraftEnrichmentService.AircraftInfo info) {
