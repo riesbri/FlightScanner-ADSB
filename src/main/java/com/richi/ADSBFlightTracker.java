@@ -228,7 +228,93 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
         }));
     }
 
+    // ── Arg parsing ──────────────────────────────────────────────────
+
+    record Args(boolean dryRun, int seconds, boolean help) {}
+
+    static Args parseArgs(String[] args) {
+        boolean dryRun = false;
+        boolean help = false;
+        int seconds = 0;
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--help", "-h" -> help = true;
+                case "--dry-run" -> {
+                    dryRun = true;
+                    if (i + 1 < args.length && args[i + 1].matches("\\d+")) {
+                        seconds = Integer.parseInt(args[++i]);
+                    }
+                }
+                default -> { /* ignore unknown */ }
+            }
+        }
+        return new Args(dryRun, seconds, help);
+    }
+
+    private static int runDryRun(int cliSeconds, ConfigManager config) {
+        int duration = cliSeconds > 0 ? cliSeconds : config.getInt("adsb.dry-run.duration-seconds", 60);
+        System.out.printf("[DRY-RUN] Listening for %ds — no Discord notifications%n", duration);
+
+        LocalAircraftAnalyzer analyzer = new LocalAircraftAnalyzer(config);
+        int[] total = {0}, alerts = {0}, noteworthy = {0};
+
+        ADSBListener listener = new ADSBListener() {
+            @Override
+            public void onAircraftDetected(Flight flight) {
+                total[0]++;
+                boolean alert = analyzer.isAlert(flight);
+                boolean interesting = alert || analyzer.isInteresting(flight.aircraft());
+                String tier = alert ? "ALERT" : interesting ? "NOTEWORTHY" : "ROUTINE";
+                if (alert) alerts[0]++;
+                else if (interesting) noteworthy[0]++;
+                System.out.printf("[DRY-RUN] [%-10s] %-10s %-6s alt=%5dft spd=%3dkts sqwk=%s%n",
+                        tier,
+                        flight.flightNumber() != null ? flight.flightNumber() : "?",
+                        flight.aircraft() != null ? flight.aircraft() : "?",
+                        flight.altitude() != null ? flight.altitude() : 0,
+                        flight.speed() != null ? flight.speed() : 0,
+                        flight.squawk() != null ? flight.squawk() : "----");
+            }
+            @Override public void onAircraftUpdated(Flight flight) {}
+            @Override public void onAircraftLost(Flight flight) {}
+        };
+
+        Dump1090DataSource ds = new Dump1090DataSource(config);
+        ds.addListener(listener);
+        try {
+            ds.start();
+            Thread.sleep(duration * 1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            System.err.println("[DRY-RUN] Connection error: " + e.getMessage());
+            return 1;
+        } finally {
+            ds.stop();
+        }
+
+        long m = duration / 60, s = duration % 60;
+        System.out.printf("[DRY-RUN] Saw %d aircraft over %dm%ds (%d alerts, %d noteworthy)%n",
+                total[0], m, s, alerts[0], noteworthy[0]);
+        return 0;
+    }
+
     public static void main(String[] args) {
+        Args parsed = parseArgs(args);
+
+        if (parsed.help()) {
+            System.out.println("Usage: ADSBFlightTracker [--dry-run [seconds]] [--help|-h]");
+            System.out.println("  (no args)            Run indefinitely, Discord notifications enabled");
+            System.out.println("  --dry-run [seconds]  Listen and print flights to stdout; exit after seconds (default 60)");
+            System.out.println("  --help | -h          Show this help and exit");
+            System.exit(0);
+        }
+
+        if (parsed.dryRun()) {
+            ConfigManager config = ConfigManager.getInstance();
+            System.exit(runDryRun(parsed.seconds(), config));
+        }
+
         try {
             ADSBFlightTracker tracker = new ADSBFlightTracker();
             tracker.start();
