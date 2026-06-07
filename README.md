@@ -70,17 +70,21 @@ systemctl --user restart flightscanner
 ## Toggle All-Flight Mode (Testing)
 
 ```bash
-# Enable all flights
-sed -i 's/discord.notify.all=false/discord.notify.all=true/' \
+# Enable all flights (testing/demo) — set the notification level
+sed -i 's/discord.notify.level=noteworthy/discord.notify.level=all/' \
   src/main/resources/application.properties
 cd ~/FlightScanner && JAVA_HOME=/opt/java-21 mvn package -DskipTests -q
 systemctl --user restart flightscanner
 
-# Disable (widebodies only)
-sed -i 's/discord.notify.all=true/discord.notify.all=false/' \
+# Disable (back to default noteworthy tier)
+sed -i 's/discord.notify.level=all/discord.notify.level=noteworthy/' \
   src/main/resources/application.properties
 cd ~/FlightScanner && JAVA_HOME=/opt/java-21 mvn package -DskipTests -q
 systemctl --user restart flightscanner
+
+# ALERT-only mode (quiet — fires only on squawk / low-altitude / gov-hex / mil-operator)
+sed -i 's/discord.notify.level=noteworthy/discord.notify.level=alert/' \
+  src/main/resources/application.properties
 ```
 
 ## Discord Embed Categories
@@ -132,7 +136,7 @@ for r in rows: print(f'{r[0]:<10} {r[1]:<8} {r[2]}')
 | `~/.config/systemd/user/flightscanner.service` | systemd unit |
 | `~/FlightScanner/flightscanner.env` | Discord webhook URL (chmod 600) |
 | `~/FlightScanner/target/FlightScraper-*-jar-with-dependencies.jar` | Built artifact |
-| `~/FlightScanner/src/main/java/com/richi/` | Source code (18 classes) |
+| `~/FlightScanner/src/main/java/com/richi/` | Source code (22 classes) |
 
 ## Requirements
 
