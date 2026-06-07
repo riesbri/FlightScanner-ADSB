@@ -8,6 +8,7 @@ import com.richi.analyzer.AircraftAnalyzerService;
 import com.richi.analyzer.LocalAircraftAnalyzer;
 import com.richi.config.ConfigManager;
 import com.richi.config.NotifyLevel;
+import com.richi.geo.AirportCoords;
 import com.richi.model.Flight;
 import com.richi.notification.DiscordFlightNotifier;
 import com.richi.notification.FlightNotifier;
@@ -48,6 +49,11 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     private final Map<String, Instant> alertedFlights = new ConcurrentHashMap<>();
     private final Duration alertCooldown;
 
+    // Airport proximity filter (null = disabled)
+    private final AirportCoords airportCoords;
+    private final double airportRadiusNm;
+    private final boolean requirePosition;
+
     public ADSBFlightTracker() {
         this(ConfigManager.getInstance());
     }
@@ -69,6 +75,10 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
                 config.getInt("adsb.notification.cooldown.hours", 4));
         this.alertCooldown = Duration.ofMinutes(
                 config.getInt("adsb.alert.cooldown.minutes", 5));
+
+        this.airportCoords  = AirportCoords.resolve(config);
+        this.airportRadiusNm = config.getInt("airport.radius.nm", 100);
+        this.requirePosition = config.getBoolean("airport.filter.require-position", false);
 
         dataSource.addListener(this);
         setupShutdownHook();
@@ -125,6 +135,23 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
 
     @Override
     public void onAircraftDetected(Flight flight) {
+        if (airportCoords != null) {
+            if (flight.latitude() != null && flight.longitude() != null) {
+                double dist = AirportCoords.haversineNm(
+                        airportCoords.lat(), airportCoords.lon(),
+                        flight.latitude(), flight.longitude());
+                if (dist > airportRadiusNm) {
+                    log.debug("Aircraft {} out of range ({} nm > {} nm), skipping",
+                            flight.flightNumber(), String.format("%.1f", dist), airportRadiusNm);
+                    return;
+                }
+            } else if (requirePosition) {
+                log.debug("Aircraft {} has no position, dropping (airport.filter.require-position=true)",
+                        flight.flightNumber());
+                return;
+            }
+        }
+
         log.info("New aircraft detected: {} ({})", flight.flightNumber(), flight.aircraft());
 
         boolean alert       = analyzer.isAlert(flight);
