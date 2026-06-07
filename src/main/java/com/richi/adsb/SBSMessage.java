@@ -82,8 +82,14 @@ public record SBSMessage(
             Double latitude = parts.length > 14 ? parseDouble(parts[14], null) : null;
             Double longitude = parts.length > 15 ? parseDouble(parts[15], null) : null;
             Integer verticalRate = parts.length > 16 ? parseInt(parts[16], null) : null;
-            String squawk = parts.length > 17 ? parts[17] : null;
-            
+            // squawk: 4-digit transponder code, empty → null
+            String squawk = parts.length > 17 ? nullIfEmpty(parts[17]) : null;
+            // alert/emergency/spi/isOnGround: SBS uses "1" for true, "0" or empty for false/unknown
+            Boolean alert      = parts.length > 18 ? parseBool(parts[18]) : null;
+            Boolean emergency  = parts.length > 19 ? parseBool(parts[19]) : null;
+            Boolean spi        = parts.length > 20 ? parseBool(parts[20]) : null;
+            Boolean isOnGround = parts.length > 21 ? parseBool(parts[21]) : null;
+
             return new SBSMessage(
                     messageType,
                     transmissionType,
@@ -100,10 +106,10 @@ public record SBSMessage(
                     longitude,
                     verticalRate,
                     squawk,
-                    null,  // alert
-                    null,  // emergency
-                    null,  // spi
-                    null   // isOnGround
+                    alert,
+                    emergency,
+                    spi,
+                    isOnGround
             );
             
         } catch (Exception e) {
@@ -140,6 +146,19 @@ public record SBSMessage(
         } catch (NumberFormatException e) {
             return defaultVal;
         }
+    }
+
+    /** Returns null if the field is empty/blank, otherwise the trimmed value. */
+    private static String nullIfEmpty(String str) {
+        if (str == null) return null;
+        String t = str.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /** SBS boolean: "1" → true, "0" → false, empty/other → null (unknown). */
+    private static Boolean parseBool(String str) {
+        if (str == null || str.trim().isEmpty()) return null;
+        return "1".equals(str.trim());
     }
     
     /**
