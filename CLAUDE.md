@@ -36,13 +36,32 @@ journalctl --user -u flightscanner -n 50       # recent
 
 There is a JUnit 5 test suite under `src/test/java` (run with `mvn test`) covering the classifier (`AircraftTypesTest`), analyzer (`LocalAircraftAnalyzerTest`), SBS parsing (`SBSMessageParseTest`), and the SQLite round-trip (`SqlFlightRepositoryTest`). `test-build.sh` and `test-scraper.sh` only smoke-launch the JAR for a few seconds.
 
+## Notification Tiers
+
+Three tiers, configured via `discord.notify.level`:
+
+| Tier | Trigger | Emoji | Color | Fires when level is… |
+|------|---------|-------|-------|----------------------|
+| **ALERT** | emergency squawk (7500/7600/7700), altitude < threshold, ICAO hex in a government range, operator matches a military keyword | 🚨 | red (0xFF0000) | always (ALERT / NOTEWORTHY / ALL) |
+| **NOTEWORTHY** | widebody / military-type / bizjet | 🛫🪖🛩 | varies | NOTEWORTHY or ALL |
+| **ROUTINE** | everything else | — | — | ALL only |
+
+ALERT always wins: a flight that triggers ALERT is sent via `sendCriticalAlert()` with a distinct embed (squawk + hex fields shown). NOTEWORTHY flights go through the regular `sendAlert()` embed.
+
 ## Configuration
 
 Single source of truth: `src/main/resources/application.properties`, loaded by `ConfigManager` (singleton). Any property can be overridden by an environment variable: convert the key to UPPER_SNAKE_CASE (e.g. `discord.webhook.url` → `DISCORD_WEBHOOK_URL`, `adsb.dump1090.host` → `ADSB_DUMP1090_HOST`). The deployed unit reads secrets from `flightscanner.env`.
 
 Notable runtime toggles:
-- `discord.notify.all` — `false` (default) only notifies on widebody/military/bizjet; `true` notifies every detected flight (testing mode).
-- `adsb.notification.cooldown.hours` — real per-key duplicate-suppression window. `ADSBFlightTracker` keeps a `Map<flightNumber+scheduledTime → lastNotifiedInstant>`; `maybeNotify` skips a key only while `now − lastNotified < cooldown`. A periodic task prunes expired entries (it does **not** wipe the whole map).
+- `discord.notify.level` — `noteworthy` (default) / `all` (every flight, testing) / `alert` (ALERT tier only). See Notification Tiers above.
+- `discord.notify.all` — **deprecated**; still honored as an OR override on top of the level. Logs a warning at startup if present. Prefer `discord.notify.level=all`.
+- `discord.startup.test.message` — `false` (default) suppresses the "✅ connected" post on startup; `true` re-enables it.
+- `adsb.notification.cooldown.hours` — per-key NOTEWORTHY cooldown. `ADSBFlightTracker` keeps a `Map<flightNumber+scheduledTime → lastNotifiedInstant>`; `maybeNotify` skips a key only while `now − lastNotified < cooldown`. A periodic task prunes expired entries (it does **not** wipe the whole map).
+- `adsb.alert.cooldown.minutes` — per-aircraft ALERT cooldown (default 5 min). Keyed on ICAO hex if available, else flightNumber+scheduledTime.
+- `adsb.alert.emergency.squawks` — comma-separated squawk codes that trigger ALERT (default `7500,7600,7700`).
+- `adsb.alert.low.altitude.feet` — altitude threshold in feet (default 1500); airborne aircraft below this trigger ALERT.
+- `adsb.alert.gov.hex.ranges` — comma-separated ICAO hex ranges for government/state aircraft (e.g. `0x348000-0x34FFFF`).
+- `adsb.alert.military.operators` — comma-separated substrings matched case-insensitively against the enriched operator field.
 - `ai.analysis.enabled` / `deepseek.api.key` — DeepSeek fallback path in `LocalAircraftAnalyzer`. Currently disabled; the AI path is exercised only when local detection finds zero widebodies.
 
 `ConfigManager.validate()` enforces required values when the corresponding feature is enabled (e.g. webhook URL when `discord.enabled=true`).
@@ -113,6 +132,8 @@ These exist outside the Maven build and are not in `target/`:
 ## Working in this Repo
 
 - After editing code, you must rebuild and restart the service for changes to take effect: `mvn package -DskipTests -q && systemctl --user restart flightscanner`. Running via `mvn exec:java` does not affect the deployed unit.
-- When changing aircraft classification, edit only `AircraftTypes.java` — both `LocalAircraftAnalyzer` and `DiscordFlightNotifier` read from the shared `AircraftCategory` enum.
-- Notification cooldown is per-key (`Map<String, Instant>`) and enforced in `ADSBFlightTracker.maybeNotify`; `cleanupNotifiedFlights` prunes expired entries to bound memory.
+- When changing ICAO type-based classification, edit only `AircraftTypes.java` — both `LocalAircraftAnalyzer` and `DiscordFlightNotifier` read from the shared `AircraftCategory` enum.
+- When changing ALERT thresholds, edit only `application.properties` — all four trigger types (squawk, altitude, hex range, operator keyword) are config-driven and read by `AircraftAlerter` at construction time. To add a new trigger type, extend `AircraftAlerter`.
+- Notification cooldown: NOTEWORTHY uses `notifiedFlights` (`Map<flightNumber+scheduledTime, Instant>`) in `maybeNotify`; ALERT uses `alertedFlights` (`Map<hexIdent-or-uniqueKey, Instant>`) in `maybeAlert`. `cleanupNotifiedFlights` prunes both maps hourly.
+- `config.getNotifyLevel()` returns a `NotifyLevel` enum (ALL / NOTEWORTHY / ALERT). The legacy `config.isDiscordNotifyAll()` is still honored as an OR override.
 - Lombok is used (`@Slf4j`, `@Getter`). The compiler plugin is configured with the annotation processor; ensure your IDE has Lombok support enabled.

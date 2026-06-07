@@ -33,8 +33,25 @@ All in `src/main/resources/application.properties`:
 | `adsb.dump1090.port` | `30003` | SBS stream port |
 | `discord.enabled` | `true` | Enable Discord notifications |
 | `discord.webhook.url` | env var | Set via `flightscanner.env` |
-| `discord.notify.all` | `false` | `true` = all flights, `false` = widebodies only |
+| `discord.notify.level` | `noteworthy` | Notification tier — see table below |
+| `discord.notify.all` | *(deprecated)* | Use `discord.notify.level=all` instead |
+| `discord.startup.test.message` | `false` | Post "✅ connected" on startup |
+| `adsb.alert.emergency.squawks` | `7500,7600,7700` | Squawks that trigger ALERT |
+| `adsb.alert.low.altitude.feet` | `1500` | Altitude below which ALERT fires |
+| `adsb.alert.gov.hex.ranges` | `0x348000-0x34FFFF` | Government ICAO hex ranges |
+| `adsb.alert.military.operators` | *list* | Military operator substrings |
+| `adsb.alert.cooldown.minutes` | `5` | Per-aircraft ALERT cooldown |
 | `ai.analysis.enabled` | `false` | DeepSeek AI (not currently used) |
+
+## Notification Levels
+
+| Level | `discord.notify.level` | What fires |
+|-------|------------------------|------------|
+| ALERT only | `alert` | Emergency squawk, low altitude, gov hex range, military operator |
+| Noteworthy | `noteworthy` (default) | ALERT + widebody / military-type / bizjet |
+| All | `all` | Every detected flight (testing/demo) |
+
+ALERT notifications are always sent regardless of the configured level and use a distinct red embed with squawk and hex fields. They have a separate 5-minute per-aircraft cooldown.
 
 ## Building & Deploying
 
@@ -68,12 +85,13 @@ systemctl --user restart flightscanner
 
 ## Discord Embed Categories
 
-| Emoji | Category | Examples |
-|-------|----------|----------|
-| ✈️ | Commercial | A320, B738, E190, CRJ2 |
-| 🛩️ | Business jet | GLEX, C56X, E55P, CL60 |
-| 🛫 | Widebody | A330, B777, B787, A350, A380 |
-| 🪖 | Military | A400, C130, F16, E3TF |
+| Emoji | Category | Color | Examples / Triggers |
+|-------|----------|-------|---------------------|
+| 🚨 | ALERT | Red | Squawk 7500/7600/7700, altitude < 1500 ft, gov hex, military operator |
+| 🛫 | Widebody | Orange | A330, B777, B787, A350, A380 |
+| 🪖 | Military type | Gold | A400, C130, F16, E3TF |
+| 🛩️ | Business jet | Amber | GLEX, C56X, E55P, CL60 |
+| ✈️ | Commercial | Blue | A320, B738, E190, CRJ2 |
 
 ## Databases
 
