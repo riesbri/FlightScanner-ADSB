@@ -39,6 +39,11 @@ public class ConfigManager {
     private final NotifyLevel notifyLevel;
     private final boolean startupTestMessage;
     
+    // Web UI settings
+    private final boolean webuiEnabled;
+    private final String webuiHost;
+    private final int webuiPort;
+
     // ADS-B settings
     private final boolean adsbEnabled;
     private final String adsbSourceType;
@@ -86,6 +91,11 @@ public class ConfigManager {
         this.notifyLevel = NotifyLevel.parse(getString("discord.notify.level", "noteworthy"));
         this.startupTestMessage = getBoolean("discord.startup.test.message", false);
         
+        // Web UI
+        this.webuiEnabled = getBoolean("webui.enabled", true);
+        this.webuiHost = getString("webui.host", "0.0.0.0");
+        this.webuiPort = getInt("webui.port", 3006);
+
         // ADS-B
         this.adsbEnabled = getBoolean("adsb.enabled", false);
         this.adsbSourceType = getString("adsb.source.type", "dump1090");
@@ -186,6 +196,10 @@ public class ConfigManager {
         return startupTestMessage;
     }
     
+    public boolean isWebuiEnabled() { return webuiEnabled; }
+    public String getWebuiHost()    { return webuiHost; }
+    public int getWebuiPort()       { return webuiPort; }
+
     public boolean isAdsbEnabled() {
         return adsbEnabled;
     }
