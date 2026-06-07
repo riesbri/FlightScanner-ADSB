@@ -53,9 +53,13 @@ public final class AircraftTypes {
 
     private AircraftTypes() {}
 
-    /** Coarse classification of an aircraft by its ICAO type code. */
+    /**
+     * Coarse classification of an aircraft.
+     * ALERT is set by AircraftAlerter (squawk/altitude/hex/operator triggers),
+     * not by ICAO type code — AircraftTypes.classify() never returns ALERT.
+     */
     public enum AircraftCategory {
-        COMMERCIAL, WIDEBODY, MILITARY, BIZJET
+        ALERT, COMMERCIAL, WIDEBODY, MILITARY, BIZJET
     }
 
     /**

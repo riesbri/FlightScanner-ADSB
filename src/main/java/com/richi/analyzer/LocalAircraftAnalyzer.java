@@ -5,20 +5,23 @@ import com.richi.model.Flight;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
+import java.util.List;
 
 @Slf4j
 public class LocalAircraftAnalyzer implements AircraftAnalyzerService {
 
     private final boolean aiEnabled;
     private final DeepSeekAircraftAnalyzer aiAnalyzer;
-    
+    private final AircraftAlerter alerter;
+
     public LocalAircraftAnalyzer() {
         this(ConfigManager.getInstance());
     }
-    
+
     public LocalAircraftAnalyzer(ConfigManager config) {
         this.aiEnabled = config.isAiAnalysisEnabled();
         this.aiAnalyzer = aiEnabled ? new DeepSeekAircraftAnalyzer(config) : null;
+        this.alerter = new AircraftAlerter(config);
         log.info("Aircraft analyzer initialized (AI enabled: {})", aiEnabled);
     }
     
@@ -62,6 +65,11 @@ public class LocalAircraftAnalyzer implements AircraftAnalyzerService {
 
     public boolean isBizjet(String aircraftType) {
         return AircraftTypes.classify(aircraftType) == AircraftTypes.AircraftCategory.BIZJET;
+    }
+
+    @Override
+    public boolean isAlert(Flight flight) {
+        return alerter.isAlert(flight);
     }
 
     @Override
