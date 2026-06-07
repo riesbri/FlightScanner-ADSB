@@ -67,6 +67,9 @@ Notable runtime toggles:
 - `airport.coordinates.lat` / `airport.coordinates.lon` — override the hardcoded airport table. Both must be set to take effect.
 - `airport.radius.nm` — proximity filter radius in nautical miles (default `100`). Only aircraft within this radius of the configured airport are notified/persisted.
 - `airport.filter.require-position` — when `true`, aircraft with no position yet are dropped; when `false` (default), positionless aircraft pass through.
+- `webui.enabled` — `true` (default) starts the built-in HTTP server; `false` disables it entirely.
+- `webui.host` — bind address for the web server (default `0.0.0.0`; use `127.0.0.1` for localhost-only).
+- `webui.port` — HTTP port (default `3006`). Endpoints: `GET /` (HTML dashboard), `GET /metrics` (Prometheus), `GET /api/flights?since=&tier=` (JSON).
 `ConfigManager.validate()` enforces required values when the corresponding feature is enabled (e.g. webhook URL when `discord.enabled=true`).
 
 ## dump1090-fa (external dependency)
@@ -108,9 +111,10 @@ Dump1090DataSource ── parses SBS via SBSMessage, maintains aircraftMap
 ADSBFlightTracker (ADSBListener)
      ├── onAircraftDetected → AirportCoords proximity filter → LocalAircraftAnalyzer.isInteresting? → DiscordFlightNotifier
      │       (aircraft outside airport.radius.nm are dropped before notify OR persist)
-     ├── every adsb.save.interval.minutes  → SqlFlightRepository.saveFlights (only in-range flights)
+     ├── every adsb.save.interval.minutes  → SqlFlightRepository.saveFlights (only in-range flights); flightsPersistedCount += saved
      ├── every 60s                         → DiscordFlightNotifier.flushCoalescedSummary (rate-limit overflow)
-     └── every 1h                          → prunes expired entries from notifiedFlights cooldown map
+     ├── every 1h                          → prunes expired entries from notifiedFlights cooldown map
+     └── (startup, if webui.enabled=true)  → WebServer on :3006 serving /, /metrics, /api/flights
 ```
 
 Key components:
@@ -124,6 +128,9 @@ Key components:
 - **`repository/SqlFlightRepository`** — JDBC + HikariCP. Supports SQLite (default) and MySQL via `db.type`. Uses `INSERT OR IGNORE` semantics keyed on `UNIQUE(flight_number, scheduled_time)`.
 - **`config/ConfigManager`** — singleton; getters are Lombok-generated (`@Getter`). Tests can call `ConfigManager.reset()` to drop the cached instance.
 - **`model/Flight`** — Java `record`. `getUniqueKey()` is `flightNumber + "_" + scheduledTime` and is what the cooldown set keys on.
+- **`web/WebServer`** — JDK `com.sun.net.httpserver.HttpServer` (no extra dep). `GET /` HTML dashboard (dark mode, auto-refresh 30s, last 50 noteworthy); `GET /metrics` Prometheus text; `GET /api/flights` JSON with `?since=<ISO-datetime>` and `?tier=all|noteworthy|alert`. Tier filtering re-classifies at response time via `AircraftTypes.classify` + `AircraftAlerter` — no tier column in the DB.
+- **`adsb/ADSBStatsProvider`** — `@FunctionalInterface` passed from `ADSBFlightTracker` to `WebServer` so the HTTP layer reads stats without knowing about `Dump1090DataSource`.
+- **`notification/DiscordStats`** — immutable record (notificationsSent, alertsSent, coalescedCount, lastSendAt) produced by `DiscordFlightNotifier.getDiscordStats()` for `/metrics`.
 
 ## State and Side-Effect Surface
 

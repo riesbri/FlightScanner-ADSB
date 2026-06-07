@@ -22,6 +22,29 @@ No AI/LLM involved. Enrichment is purely adsb.lol API lookups, cached forever pe
 | `journalctl --user -u flightscanner -f` | Live logs |
 | `journalctl --user -u flightscanner -n 50` | Last 50 log lines |
 
+## Web UI & Monitoring
+
+A built-in HTTP server (JDK `com.sun.net.httpserver`, no extra deps) starts automatically on port **3006**.
+
+| Endpoint | Description |
+|----------|-------------|
+| `http://localhost:3006/` | Dark-mode HTML dashboard — last 50 noteworthy flights, auto-refreshes every 30s |
+| `http://localhost:3006/metrics` | Prometheus text format (`text/plain; version=0.0.4`) |
+| `http://localhost:3006/api/flights` | JSON — query params `since=<ISO-datetime>` (default today midnight) and `tier=all\|noteworthy\|alert` (default noteworthy) |
+
+```bash
+# Live metrics
+curl -s http://localhost:3006/metrics
+
+# Today's noteworthy flights as JSON
+curl -s "http://localhost:3006/api/flights"
+
+# All flights since midnight
+curl -s "http://localhost:3006/api/flights?tier=all&since=$(date +%Y-%m-%dT00:00:00)"
+```
+
+Disable or move the server with `webui.enabled=false` / `webui.port=3006` in `application.properties`.
+
 ## Configuration
 
 All in `src/main/resources/application.properties`:
@@ -47,6 +70,9 @@ All in `src/main/resources/application.properties`:
 | `airport.coordinates.lat` / `airport.coordinates.lon` | *(commented)* | Override the hardcoded airport. Both must be set. |
 | `airport.radius.nm` | `100` | Aircraft outside this nautical-mile radius of the airport are dropped before notify/persist. |
 | `airport.filter.require-position` | `false` | When `true`, aircraft with no position yet are dropped. |
+| `webui.enabled` | `true` | Enable the built-in HTTP server. |
+| `webui.host` | `0.0.0.0` | Bind address (use `127.0.0.1` to restrict to localhost). |
+| `webui.port` | `3006` | Port for `/`, `/metrics`, `/api/flights`. |
 
 ## Notification Levels
 
