@@ -12,6 +12,7 @@ import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class DiscordFlightNotifier implements FlightNotifier {
@@ -60,6 +61,10 @@ public class DiscordFlightNotifier implements FlightNotifier {
     private final CloseableHttpClient httpClient;
     private final DiscordRateLimiter rateLimiter;
 
+    private final AtomicLong notificationsSent = new AtomicLong(0);
+    private final AtomicLong alertsSent = new AtomicLong(0);
+    private volatile java.time.Instant lastSendAt = null;
+
     public DiscordFlightNotifier() {
         this(ConfigManager.getInstance());
     }
@@ -94,6 +99,8 @@ public class DiscordFlightNotifier implements FlightNotifier {
         }
         String payload = String.format("{\"embeds\": [%s]}", buildEmbedObject(flight));
         sendWebhook(payload);
+        notificationsSent.incrementAndGet();
+        lastSendAt = java.time.Instant.now();
     }
 
     @Override
@@ -102,6 +109,18 @@ public class DiscordFlightNotifier implements FlightNotifier {
         // ALERT embeds bypass the rate limiter — they are rare and critical
         String payload = String.format("{\"embeds\": [%s]}", buildAlertEmbedObject(flight));
         sendWebhook(payload);
+        alertsSent.incrementAndGet();
+        lastSendAt = java.time.Instant.now();
+    }
+
+    /** Returns a point-in-time snapshot of notification counters. */
+    public DiscordStats getDiscordStats() {
+        return new DiscordStats(
+                notificationsSent.get(),
+                alertsSent.get(),
+                rateLimiter.getCoalescedCount(),
+                lastSendAt
+        );
     }
 
     @Override

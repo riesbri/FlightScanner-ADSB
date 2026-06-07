@@ -58,4 +58,9 @@ public class DiscordRateLimiter {
     public int takeCoalescedCount() {
         return coalescedCount.getAndSet(0);
     }
+
+    /** Non-destructive read of the current overflow count (for /metrics). */
+    public int getCoalescedCount() {
+        return coalescedCount.get();
+    }
 }
