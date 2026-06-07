@@ -393,6 +393,7 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
         private volatile Integer heading;
         private volatile Double latitude;
         private volatile Double longitude;
+        private volatile String squawk;        // Most recent transponder code from SBS
         private volatile String aircraftType;  // From enrichment service
         private volatile String aircraftDesc;
         private volatile String registration;
@@ -433,7 +434,11 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
                 longitude = msg.longitude();
                 changed = true;
             }
-            
+            if (msg.squawk() != null && !msg.squawk().equals(squawk)) {
+                squawk = msg.squawk();
+                changed = true;
+            }
+
             lastSeen = Instant.now();
             return changed;
         }
@@ -452,13 +457,13 @@ public class Dump1090DataSource implements ADSBDataSource, AutoCloseable {
         
         Flight toFlight() {
             if (callsign == null) return null;
-            
-            // Use enriched type if available, otherwise callsign prefix guess, otherwise UNKNOWN
+
+            // Use enriched type if available, otherwise description, otherwise UNKNOWN
             String acType = aircraftType != null && !aircraftType.isEmpty() ? aircraftType :
                     (aircraftDesc != null && !aircraftDesc.isEmpty() ? aircraftDesc : "UNKNOWN");
-            
+
             LocalDateTime scheduledTime = LocalDateTime.now();
-            return new Flight(callsign, hexIdent, acType, scheduledTime, altitude, speed);
+            return new Flight(callsign, hexIdent, acType, scheduledTime, altitude, speed, squawk, hexIdent, operator);
         }
         
         void setAircraftInfo(AircraftEnrichmentService.AircraftInfo info) {
