@@ -14,6 +14,7 @@ import com.richi.notification.DiscordFlightNotifier;
 import com.richi.notification.FlightNotifier;
 import com.richi.repository.FlightRepository;
 import com.richi.repository.SqlFlightRepository;
+import com.richi.web.WebServer;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Flight tracker that uses ADS-B data from a local receiver (dump1090-fa).
@@ -36,10 +38,12 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     private final ADSBDataSource dataSource;
     private final FlightRepository repository;
     private final AircraftAnalyzerService analyzer;
-    private final FlightNotifier notifier;
+    private final DiscordFlightNotifier notifier;
 
     private final ScheduledExecutorService executor;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicLong flightsPersistedCount = new AtomicLong(0);
+    private WebServer webServer;
 
     // NOTEWORTHY cooldown — per flight key (flightNumber+scheduledTime)
     private final Map<String, Instant> notifiedFlights = new ConcurrentHashMap<>();
@@ -90,6 +94,23 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
 
             config.validate();
             repository.initialize();
+
+            if (config.isWebuiEnabled()) {
+                try {
+                    webServer = new WebServer(
+                            config.getWebuiPort(),
+                            config.getWebuiHost(),
+                            repository,
+                            dataSource::getStats,
+                            notifier::getDiscordStats,
+                            flightsPersistedCount::get,
+                            config);
+                    webServer.start();
+                } catch (Exception e) {
+                    log.error("Failed to start WebServer: {}", e.getMessage());
+                }
+            }
+
             dataSource.start();
 
             int saveInterval = config.getInt("adsb.save.interval.minutes", 5);
@@ -106,6 +127,7 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     public void stop() {
         if (running.compareAndSet(true, false)) {
             log.info("Stopping ADSBFlightTracker...");
+            if (webServer != null) webServer.stop();
             dataSource.stop();
             executor.shutdown();
             try {
@@ -236,6 +258,7 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
             List<Flight> flights = dataSource.getCurrentFlights();
             if (!flights.isEmpty()) {
                 int saved = repository.saveFlights(flights);
+                flightsPersistedCount.addAndGet(saved);
                 log.debug("Persisted {}/{} flights to database", saved, flights.size());
             }
         } catch (Exception e) {
