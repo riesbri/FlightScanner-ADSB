@@ -39,10 +39,6 @@ public class ConfigManager {
     private final NotifyLevel notifyLevel;
     private final boolean startupTestMessage;
     
-    // AI settings
-    private final boolean aiAnalysisEnabled;
-    private final String deepseekApiKey;
-    
     // ADS-B settings
     private final boolean adsbEnabled;
     private final String adsbSourceType;
@@ -89,10 +85,6 @@ public class ConfigManager {
         }
         this.notifyLevel = NotifyLevel.parse(getString("discord.notify.level", "noteworthy"));
         this.startupTestMessage = getBoolean("discord.startup.test.message", false);
-        
-        // AI
-        this.aiAnalysisEnabled = getBoolean("ai.analysis.enabled", false);
-        this.deepseekApiKey = getString("deepseek.api.key", "");
         
         // ADS-B
         this.adsbEnabled = getBoolean("adsb.enabled", false);
@@ -194,14 +186,6 @@ public class ConfigManager {
         return startupTestMessage;
     }
     
-    public boolean isAiAnalysisEnabled() {
-        return aiAnalysisEnabled;
-    }
-    
-    public String getDeepseekApiKey() {
-        return deepseekApiKey;
-    }
-    
     public boolean isAdsbEnabled() {
         return adsbEnabled;
     }
@@ -277,10 +261,6 @@ public class ConfigManager {
             if (discordWebhookUrl.isEmpty() || discordWebhookUrl.startsWith("${")) {
                 throw new IllegalStateException("discord.webhook.url must be set when discord.enabled=true");
             }
-        }
-        
-        if (aiAnalysisEnabled && deepseekApiKey.isEmpty()) {
-            throw new IllegalStateException("deepseek.api.key must be set when ai.analysis.enabled=true");
         }
         
         log.info("Configuration validation passed");

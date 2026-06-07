@@ -6,8 +6,6 @@ import java.util.List;
 
 public interface AircraftAnalyzerService {
 
-    List<String> findWidebodyFlights(List<Flight> flights);
-
     boolean isWidebody(String aircraftType);
 
     /** Returns true for widebody / military / bizjet aircraft types. */
@@ -18,8 +16,6 @@ public interface AircraftAnalyzerService {
     default boolean isAlert(Flight flight) {
         return false;
     }
-
-    List<String> findInterestingFlights(List<Flight> flights);
 
     List<Flight> analyzeFlights(List<Flight> flights);
 }
