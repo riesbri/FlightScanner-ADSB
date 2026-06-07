@@ -1,7 +1,10 @@
 package com.richi.analyzer;
 
+import com.richi.model.Flight;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,6 +18,8 @@ class LocalAircraftAnalyzerTest {
         // application.properties has ai.analysis.enabled=false, so no DeepSeek client is created.
         analyzer = new LocalAircraftAnalyzer();
     }
+
+    // ── Type-based classification ────────────────────────────────────
 
     @Test
     void detectsWidebody() {
@@ -41,5 +46,40 @@ class LocalAircraftAnalyzerTest {
     @Test
     void narrowbodyIsNotInteresting() {
         assertFalse(analyzer.isInteresting("B738"));
+    }
+
+    // ── ALERT detection ──────────────────────────────────────────────
+
+    @Test
+    void isAlertForEmergencySquawk() {
+        Flight f = new Flight("AAL1", "JFK", "B738", LocalDateTime.now(), 20000, 400,
+                "7700", "A12345", null);
+        assertTrue(analyzer.isAlert(f));
+    }
+
+    @Test
+    void isAlertForLowAltitude() {
+        // 500 ft is below the default 1500 ft threshold
+        Flight f = new Flight("EIN2", "DUB", "A320", LocalDateTime.now(), 500, 150,
+                null, "4CA001", null);
+        assertTrue(analyzer.isAlert(f));
+    }
+
+    @Test
+    void normalFlightIsNotAlert() {
+        // Normal cruise: no emergency squawk, high altitude, civil hex, no military operator
+        Flight f = new Flight("RYR1", "DUB", "B738", LocalDateTime.now(), 35000, 450,
+                "1234", "4CA2D6", "Ryanair");
+        assertFalse(analyzer.isAlert(f));
+    }
+
+    @Test
+    void isAlertFlightIsAlsoInteresting() {
+        // ALERT implies interesting (alert || isInteresting(type))
+        Flight f = new Flight("AAL1", "JFK", "B738", LocalDateTime.now(), 20000, 400,
+                "7500", "A12345", null);
+        assertTrue(analyzer.isAlert(f));
+        // isInteresting(String) still works for type-based check
+        assertTrue(analyzer.isInteresting("B777-300ER"));
     }
 }
