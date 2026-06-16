@@ -4,6 +4,12 @@
 
 ---
 
+## Focus
+
+<!-- Leave empty for full discovery, or write what you want the cron to focus on. -->
+
+---
+
 ## Active
 
 - [ ] Merge `fix/four-defects` to main — 31 commits ready (WebServer, alert tiers, rate limiting, airport filter, 4 defect fixes) (2026-06-16)
