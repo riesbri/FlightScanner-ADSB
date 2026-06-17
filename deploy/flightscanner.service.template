@@ -1,0 +1,38 @@
+# FlightScanner systemd user unit template
+#
+# Install:
+#   1. Copy to ~/.config/systemd/user/flightscanner.service
+#   2. Replace every <PLACEHOLDER> below with your actual values
+#   3. systemctl --user daemon-reload
+#   4. systemctl --user enable --now flightscanner
+#
+# View logs:
+#   journalctl --user -u flightscanner -f
+
+[Unit]
+Description=FlightScanner ADS-B Tracker
+After=network.target dump1090-fa.service
+
+[Service]
+Type=simple
+
+# Directory containing the built fat JAR and the flightscanner.env file
+WorkingDirectory=<PATH_TO_REPO>
+
+# File containing DISCORD_WEBHOOK_URL (chmod 600, never commit it)
+EnvironmentFile=<PATH_TO_REPO>/flightscanner.env
+
+# Java 21 home (e.g. /opt/java-21 or /usr/lib/jvm/temurin-21)
+Environment=JAVA_HOME=<JAVA_HOME>
+
+ExecStart=<JAVA_HOME>/bin/java \
+    -cp target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar \
+    com.flightscanner.ADSBFlightTracker
+
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
