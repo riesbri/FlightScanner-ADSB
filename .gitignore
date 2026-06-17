@@ -24,3 +24,6 @@ screenshots/
 
 # OS files
 .DS_Store
+
+# Personal workflow artifacts (xiecheng process tracking — not part of project)
+WORKLOG.md

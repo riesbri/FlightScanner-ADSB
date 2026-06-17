@@ -10,14 +10,14 @@ The repo also contains a legacy FlightRadar24 web-scraping mode (`FlightTrackerA
 
 ## Build, Run, Deploy
 
-The project uses Java 21 (Temurin at `/opt/java-21`) and Maven (use the wrapper `./mvnw` if no system Maven). The fat JAR's manifest `Main-Class` is `com.richi.FlightTrackerApp` (web scraper) — for ADS-B mode the systemd unit invokes `com.richi.ADSBFlightTracker` explicitly.
+The project uses Java 21 (Temurin recommended) and Maven (use the wrapper `./mvnw` if no system Maven). The fat JAR's manifest `Main-Class` is `com.richi.FlightTrackerApp` (web scraper) — for ADS-B mode the systemd unit invokes `com.richi.ADSBFlightTracker` explicitly.
 
 ```bash
 # Build (skip tests for a fast compile/package)
-JAVA_HOME=/opt/java-21 mvn package -DskipTests -q
+JAVA_HOME=/path/to/java-21 mvn package -DskipTests -q
 
 # Run the JUnit 5 test suite
-JAVA_HOME=/opt/java-21 mvn test -q
+JAVA_HOME=/path/to/java-21 mvn test -q
 
 # Run ADS-B mode directly
 mvn exec:java -Dexec.mainClass="com.richi.ADSBFlightTracker"
