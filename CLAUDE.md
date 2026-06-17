@@ -10,7 +10,7 @@ The repo also contains a legacy FlightRadar24 web-scraping mode (`FlightTrackerA
 
 ## Build, Run, Deploy
 
-The project uses Java 21 (Temurin recommended) and Maven (use the wrapper `./mvnw` if no system Maven). The fat JAR's manifest `Main-Class` is `com.richi.FlightTrackerApp` (web scraper) — for ADS-B mode the systemd unit invokes `com.richi.ADSBFlightTracker` explicitly.
+The project uses Java 21 (Temurin recommended) and Maven (use the wrapper `./mvnw` if no system Maven). The fat JAR's manifest `Main-Class` is `com.flightscanner.ADSBFlightTracker` — both the jar and assembly plugins target ADS-B mode. To run the legacy web-scraper, invoke `com.flightscanner.FlightTrackerApp` explicitly.
 
 ```bash
 # Build (skip tests for a fast compile/package)
@@ -20,12 +20,12 @@ JAVA_HOME=/path/to/java-21 mvn package -DskipTests -q
 JAVA_HOME=/path/to/java-21 mvn test -q
 
 # Run ADS-B mode directly
-mvn exec:java -Dexec.mainClass="com.richi.ADSBFlightTracker"
+mvn exec:java -Dexec.mainClass="com.flightscanner.ADSBFlightTracker"
 
 # Run web scraper mode directly
-mvn exec:java -Dexec.mainClass="com.richi.FlightTrackerApp"
+mvn exec:java -Dexec.mainClass="com.flightscanner.FlightTrackerApp"
 
-# Run the fat JAR (defaults to FlightTrackerApp via manifest)
+# Run the fat JAR (defaults to ADSBFlightTracker via manifest)
 java -jar target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 
 # Run as the deployed service
@@ -44,7 +44,7 @@ Three tiers, configured via `discord.notify.level`:
 |------|---------|-------|-------|----------------------|
 | **ALERT** | emergency squawk (7500/7600/7700), altitude < threshold, ICAO hex in a government range, operator matches a military keyword | 🚨 | red (0xFF0000) | always (ALERT / NOTEWORTHY / ALL) |
 | **NOTEWORTHY** | widebody / military-type / bizjet | 🛫🪖🛩 | varies | NOTEWORTHY or ALL |
-| **ROUTINE** | everything else | — | — | ALL only |
+| **ALL** | everything else | — | — | ALL only (`discord.notify.level=all`) |
 
 ALERT always wins: a flight that triggers ALERT is sent via `sendCriticalAlert()` with a distinct embed (squawk + hex fields shown). NOTEWORTHY flights go through the regular `sendAlert()` embed.
 
@@ -62,7 +62,7 @@ Notable runtime toggles:
 - `adsb.alert.low.altitude.feet` — altitude threshold in feet (default 1500); airborne aircraft below this trigger ALERT.
 - `adsb.alert.gov.hex.ranges` — comma-separated ICAO hex ranges for government/state aircraft (e.g. `0x348000-0x34FFFF`).
 - `adsb.alert.military.operators` — comma-separated substrings matched case-insensitively against the enriched operator field.
-- `discord.rate.limit.per.minute` — max NOTEWORTHY/ROUTINE notifications per 60s window (default `10`). ALERT pings always bypass this limit.
+- `discord.rate.limit.per.minute` — max NOTEWORTHY/ALL notifications per 60s window (default `10`). ALERT pings always bypass this limit.
 - `discord.rate.coalesce.enabled` — when `true` (default), overflow is coalesced into a single "📊 +N more…" embed posted every 60s; when `false`, overflow is dropped silently.
 - `airport.coordinates.lat` / `airport.coordinates.lon` — override the hardcoded airport table. Both must be set to take effect.
 - `airport.radius.nm` — proximity filter radius in nautical miles (default `100`). Only aircraft within this radius of the configured airport are notified/persisted.
@@ -87,8 +87,8 @@ If SBS output isn't enabled, set `NET_SBS_OUTPUT_PORT=30003` in `/etc/default/du
 
 Two top-level entry points, sharing the rest of the code:
 
-- `com.richi.ADSBFlightTracker` (active) — listens to the ADS-B stream, dispatches notifications.
-- `com.richi.FlightTrackerApp` (legacy) — schedules `PlaywrightFlightScraper` against FlightRadar24 on `scraper.interval.minutes`.
+- `com.flightscanner.ADSBFlightTracker` (active) — listens to the ADS-B stream, dispatches notifications.
+- `com.flightscanner.FlightTrackerApp` (legacy) — schedules `PlaywrightFlightScraper` against FlightRadar24 on `scraper.interval.minutes`.
 
 ADS-B data flow:
 
