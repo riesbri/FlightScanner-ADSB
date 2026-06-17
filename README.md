@@ -65,6 +65,8 @@ java -cp target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar com.fligh
 
 Open `http://localhost:3006/` for the dashboard.
 
+> **Not in Spain?** The default airport is VLC (Valencia). Set `airport.code` to your nearest IATA code in `application.properties`, or override with exact coordinates using `airport.coordinates.lat` / `airport.coordinates.lon` — see [Airport proximity filter](#-airport-proximity-filter) below.
+
 ---
 
 ## 🔔 Notification tiers
