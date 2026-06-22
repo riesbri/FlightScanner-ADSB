@@ -6,6 +6,8 @@ import com.flightscanner.adsb.ADSBStatsProvider;
 import com.flightscanner.analyzer.AircraftAlerter;
 import com.flightscanner.analyzer.AircraftTypes;
 import com.flightscanner.config.ConfigManager;
+import com.flightscanner.geo.AirportCoords;
+import com.flightscanner.geo.ICAOCountry;
 import com.flightscanner.model.Flight;
 import com.flightscanner.notification.DiscordStats;
 import com.flightscanner.repository.FlightRepository;
@@ -18,6 +20,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -36,68 +39,45 @@ public class WebServer implements AutoCloseable {
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final String PROM_CONTENT_TYPE = "text/plain; version=0.0.4";
 
-    private static final String HTML_TEMPLATE = """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-              <meta charset="UTF-8">
-              <meta http-equiv="refresh" content="30">
-              <title>FlightScanner</title>
-              <style>
-                body { background:#1a1a2e; color:#e0e0e0; font-family:monospace; padding:20px; margin:0; }
-                h1   { color:#7eb8f7; margin-bottom:16px; }
-                table{ border-collapse:collapse; width:100%%; }
-                th   { background:#16213e; color:#7eb8f7; padding:6px 12px; text-align:left; border-bottom:2px solid #2a2a5e; }
-                td   { padding:4px 12px; border-bottom:1px solid #2a2a4e; }
-                tr:hover td { background:#16213e; }
-                .footer { margin-top:16px; font-size:0.85em; color:#888; }
-                a { color:#7eb8f7; }
-              </style>
-            </head>
-            <body>
-              <h1>FlightScanner — Noteworthy Flights (last 24 h)</h1>
-              <table>
-                <thead>
-                  <tr><th>Time</th><th>Flight</th><th>Aircraft</th><th>Altitude</th><th>Speed</th><th>Operator</th></tr>
-                </thead>
-                <tbody>
-            %s
-                </tbody>
-              </table>
-              <div class="footer">
-                Last refresh: %s &middot; <a href="/api/flights">Raw JSON</a> &middot; <a href="/metrics">Metrics</a>
-              </div>
-            </body>
-            </html>
-            """;
-
     private final HttpServer server;
     private final FlightRepository repository;
     private final ADSBStatsProvider statsProvider;
     private final Supplier<DiscordStats> discordStatsSupplier;
     private final LongSupplier flightsPersistedSupplier;
+    private final Supplier<List<Flight>> liveFlightsSupplier;
     private final AircraftAlerter alerter;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final Instant startedAt = Instant.now();
+    private final double mapLat;
+    private final double mapLon;
 
     public WebServer(int port, String host,
                      FlightRepository repository,
                      ADSBStatsProvider statsProvider,
                      Supplier<DiscordStats> discordStatsSupplier,
                      LongSupplier flightsPersistedSupplier,
+                     Supplier<List<Flight>> liveFlightsSupplier,
                      ConfigManager config) throws IOException {
         this.repository = repository;
         this.statsProvider = statsProvider;
         this.discordStatsSupplier = discordStatsSupplier;
         this.flightsPersistedSupplier = flightsPersistedSupplier;
+        this.liveFlightsSupplier = liveFlightsSupplier;
         this.alerter = new AircraftAlerter(config);
+
+        AirportCoords coords = AirportCoords.resolve(config);
+        this.mapLat = (coords != null) ? coords.lat() : 39.49;
+        this.mapLon = (coords != null) ? coords.lon() : -0.48;
 
         InetSocketAddress addr = ("0.0.0.0".equals(host) || host == null || host.isBlank())
                 ? new InetSocketAddress(port)
                 : new InetSocketAddress(host, port);
         this.server = HttpServer.create(addr, 0);
-        this.server.createContext("/metrics", this::handleMetrics);
+        this.server.createContext("/metrics",     this::handleMetrics);
         this.server.createContext("/api/flights", this::handleApiFlights);
-        this.server.createContext("/", this::handleHtml);
+        this.server.createContext("/api/live",    this::handleApiLive);
+        this.server.createContext("/health",      this::handleHealth);
+        this.server.createContext("/",            this::handleHtml);
         this.server.setExecutor(Executors.newFixedThreadPool(4, r -> {
             Thread t = new Thread(r, "webserver");
             t.setDaemon(true);
@@ -126,6 +106,44 @@ public class WebServer implements AutoCloseable {
     }
 
     // ── Handlers ────────────────────────────────────────────────────────────
+
+    private void handleHealth(HttpExchange ex) {
+        try {
+            ADSBStats stats = statsProvider.getStats();
+            long uptimeSec = java.time.Duration.between(startedAt, Instant.now()).getSeconds();
+            long lastMsgSec = stats.lastMessageTime() != null
+                    ? java.time.Duration.between(stats.lastMessageTime(), Instant.now()).getSeconds()
+                    : -1;
+            String body = String.format(
+                    "{\"status\":\"ok\",\"uptime_s\":%d,\"last_message_ago_s\":%d,\"connected\":%b,\"aircraft_tracked\":%d}",
+                    uptimeSec, lastMsgSec, stats.connected(), stats.aircraftCount());
+            sendResponse(ex, 200, "application/json", body.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.error("Error serving /health: {}", e.getMessage());
+            sendError(ex, e);
+        }
+    }
+
+    private void handleApiLive(HttpExchange ex) {
+        try {
+            List<Flight> live = liveFlightsSupplier.get();
+            List<Map<String, Object>> aircraft = live.stream()
+                    .filter(f -> f.latitude() != null && f.longitude() != null)
+                    .map(this::liveFlightToMap)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("count", aircraft.size());
+            response.put("aircraft", aircraft);
+
+            byte[] body = mapper.writeValueAsBytes(response);
+            ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            sendResponse(ex, 200, "application/json", body);
+        } catch (Exception e) {
+            log.error("Error serving /api/live: {}", e.getMessage());
+            sendError(ex, e);
+        }
+    }
 
     private void handleMetrics(HttpExchange ex) {
         try {
@@ -198,7 +216,6 @@ public class WebServer implements AutoCloseable {
 
             String tier = params.getOrDefault("tier", "noteworthy").toLowerCase();
 
-            // Fetch enough data to cover the 'since' window, cap at 72h
             long hoursBack = java.time.Duration.between(since, LocalDateTime.now()).toHours() + 1;
             hoursBack = Math.max(1, Math.min(72, hoursBack));
             List<Flight> all = repository.findRecent((int) hoursBack);
@@ -212,7 +229,7 @@ public class WebServer implements AutoCloseable {
                         .filter(alerter::isAlert)
                         .collect(Collectors.toList());
                 case "all" -> sinceFiltered;
-                default -> sinceFiltered.stream()  // "noteworthy"
+                default -> sinceFiltered.stream()
                         .filter(f -> AircraftTypes.classify(f.aircraft())
                                 != AircraftTypes.AircraftCategory.COMMERCIAL)
                         .collect(Collectors.toList());
@@ -243,10 +260,12 @@ public class WebServer implements AutoCloseable {
 
             StringBuilder rows = new StringBuilder();
             for (Flight f : noteworthy) {
+                String flag = ICAOCountry.flagFromHex(f.hexIdent());
                 rows.append(String.format(
-                        "      <tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>%n",
+                        "      <tr><td>%s</td><td>%s</td><td>%s %s</td><td>%s</td><td>%s</td><td>%s</td></tr>%n",
                         he(f.scheduledTime() != null ? f.scheduledTime().format(TIME_FMT) : ""),
                         he(f.flightNumber()),
+                        he(flag),
                         he(f.aircraft()),
                         f.altitude() != null ? f.altitude() + " ft" : "N/A",
                         f.speed() != null ? f.speed() + " kts" : "N/A",
@@ -254,12 +273,93 @@ public class WebServer implements AutoCloseable {
             }
 
             String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-            String html = String.format(HTML_TEMPLATE, rows, now);
+            String html = buildHtml(rows.toString(), now);
             sendResponse(ex, 200, "text/html; charset=utf-8", html.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Error serving /: {}", e.getMessage());
             sendError(ex, e);
         }
+    }
+
+    // ── HTML builder ─────────────────────────────────────────────────────────
+
+    private String buildHtml(String tableRows, String refreshTime) {
+        return "<!DOCTYPE html>\n"
+             + "<html lang=\"en\">\n"
+             + "<head>\n"
+             + "  <meta charset=\"UTF-8\">\n"
+             + "  <meta http-equiv=\"refresh\" content=\"30\">\n"
+             + "  <title>FlightScanner</title>\n"
+             + "  <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\"/>\n"
+             + "  <style>\n"
+             + "    body { background:#1a1a2e; color:#e0e0e0; font-family:monospace; padding:20px; margin:0; }\n"
+             + "    h1   { color:#7eb8f7; margin-bottom:16px; }\n"
+             + "    h2   { color:#7eb8f7; margin-top:24px; margin-bottom:8px; }\n"
+             + "    #map { height:420px; width:100%; border:1px solid #2a2a5e; margin-bottom:20px; }\n"
+             + "    .leaflet-popup-content-wrapper { background:#1a1a2e; color:#e0e0e0; border:1px solid #7eb8f7; }\n"
+             + "    .leaflet-popup-tip { background:#1a1a2e; }\n"
+             + "    table{ border-collapse:collapse; width:100%; }\n"
+             + "    th   { background:#16213e; color:#7eb8f7; padding:6px 12px; text-align:left; border-bottom:2px solid #2a2a5e; }\n"
+             + "    td   { padding:4px 12px; border-bottom:1px solid #2a2a4e; }\n"
+             + "    tr:hover td { background:#16213e; }\n"
+             + "    .footer { margin-top:16px; font-size:0.85em; color:#888; }\n"
+             + "    a { color:#7eb8f7; }\n"
+             + "  </style>\n"
+             + "</head>\n"
+             + "<body>\n"
+             + "  <h1>FlightScanner</h1>\n"
+             + "  <h2>Live Traffic</h2>\n"
+             + "  <div id=\"map\"></div>\n"
+             + "  <h2>Noteworthy Flights (last 24 h)</h2>\n"
+             + "  <table>\n"
+             + "    <thead>\n"
+             + "      <tr><th>Time</th><th>Flight</th><th>Aircraft</th><th>Altitude</th><th>Speed</th><th>Operator</th></tr>\n"
+             + "    </thead>\n"
+             + "    <tbody>\n"
+             + tableRows
+             + "    </tbody>\n"
+             + "  </table>\n"
+             + "  <div class=\"footer\">\n"
+             + "    Last refresh: " + he(refreshTime)
+             + " &middot; <a href=\"/api/flights\">JSON API</a>"
+             + " &middot; <a href=\"/api/live\">Live JSON</a>"
+             + " &middot; <a href=\"/metrics\">Metrics</a>"
+             + " &middot; <a href=\"/health\">Health</a>\n"
+             + "  </div>\n"
+             + "  <script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>\n"
+             + "  <script>\n"
+             + "    var map = L.map('map').setView([" + mapLat + ", " + mapLon + "], 7);\n"
+             + "    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {\n"
+             + "      attribution: '\\u00a9 <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>',\n"
+             + "      maxZoom: 15\n"
+             + "    }).addTo(map);\n"
+             + "    var markers = {};\n"
+             + "    function updateMap() {\n"
+             + "      fetch('/api/live').then(r => r.json()).then(data => {\n"
+             + "        var seen = new Set();\n"
+             + "        (data.aircraft || []).forEach(function(ac) {\n"
+             + "          if (ac.lat == null || ac.lon == null) return;\n"
+             + "          seen.add(ac.hex);\n"
+             + "          var popup = (ac.flag || '') + ' <b>' + ac.flightNumber + '</b><br>'\n"
+             + "            + ac.aircraft + ' | ' + (ac.altitude != null ? ac.altitude + ' ft' : '?')\n"
+             + "            + ' | ' + (ac.speed != null ? ac.speed + ' kts' : '?')\n"
+             + "            + (ac.operator ? '<br>' + ac.operator : '');\n"
+             + "          if (markers[ac.hex]) {\n"
+             + "            markers[ac.hex].setLatLng([ac.lat, ac.lon]).setPopupContent(popup);\n"
+             + "          } else {\n"
+             + "            markers[ac.hex] = L.marker([ac.lat, ac.lon]).addTo(map).bindPopup(popup);\n"
+             + "          }\n"
+             + "        });\n"
+             + "        Object.keys(markers).forEach(function(hex) {\n"
+             + "          if (!seen.has(hex)) { map.removeLayer(markers[hex]); delete markers[hex]; }\n"
+             + "        });\n"
+             + "      }).catch(function() {});\n"
+             + "    }\n"
+             + "    updateMap();\n"
+             + "    setInterval(updateMap, 30000);\n"
+             + "  </script>\n"
+             + "</body>\n"
+             + "</html>\n";
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -272,6 +372,20 @@ public class WebServer implements AutoCloseable {
         m.put("speed", f.speed());
         m.put("scheduledTime", f.scheduledTime() != null ? f.scheduledTime().toString() : null);
         m.put("operator", f.operator());
+        return m;
+    }
+
+    private Map<String, Object> liveFlightToMap(Flight f) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("hex", f.hexIdent());
+        m.put("flightNumber", f.flightNumber());
+        m.put("aircraft", f.aircraft());
+        m.put("altitude", f.altitude());
+        m.put("speed", f.speed());
+        m.put("lat", f.latitude());
+        m.put("lon", f.longitude());
+        m.put("operator", f.operator());
+        m.put("flag", ICAOCountry.flagFromHex(f.hexIdent()));
         return m;
     }
 

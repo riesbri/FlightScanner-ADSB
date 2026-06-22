@@ -56,6 +56,7 @@ class WebServerTest {
                 () -> fixedStats,
                 () -> fixedDiscord,
                 () -> 678L,
+                List::of,
                 config);
         server.start();
         baseUrl = "http://localhost:" + server.getPort();
@@ -219,6 +220,56 @@ class WebServerTest {
         String body = get("/").body();
         assertTrue(body.contains("Last refresh"), "footer should show last refresh time");
         assertTrue(body.contains("/api/flights"), "footer should link to JSON API");
+    }
+
+    @Test @Order(21)
+    void homePageContainsLeafletMap() throws Exception {
+        String body = get("/").body();
+        assertTrue(body.contains("leaflet"), "HTML must include Leaflet.js map");
+        assertTrue(body.contains("id=\"map\""), "HTML must have map div");
+    }
+
+    // ── /health ──────────────────────────────────────────────────────────────
+
+    @Test @Order(22)
+    void healthReturns200() throws Exception {
+        assertEquals(200, get("/health").statusCode());
+    }
+
+    @Test @Order(23)
+    void healthContentTypeIsJson() throws Exception {
+        String ct = get("/health").headers().firstValue("Content-Type").orElse("");
+        assertEquals("application/json", ct);
+    }
+
+    @Test @Order(24)
+    void healthBodyHasRequiredFields() throws Exception {
+        String body = get("/health").body();
+        assertAll(
+                () -> assertTrue(body.contains("\"status\":\"ok\""),       "missing status:ok"),
+                () -> assertTrue(body.contains("\"uptime_s\":"),           "missing uptime_s"),
+                () -> assertTrue(body.contains("\"connected\":"),          "missing connected"),
+                () -> assertTrue(body.contains("\"aircraft_tracked\":"),   "missing aircraft_tracked")
+        );
+    }
+
+    // ── /api/live ────────────────────────────────────────────────────────────
+
+    @Test @Order(25)
+    void apiLiveReturns200() throws Exception {
+        assertEquals(200, get("/api/live").statusCode());
+    }
+
+    @Test @Order(26)
+    void apiLiveContentTypeIsJson() throws Exception {
+        String ct = get("/api/live").headers().firstValue("Content-Type").orElse("");
+        assertEquals("application/json", ct);
+    }
+
+    @Test @Order(27)
+    void apiLiveResponseHasCountField() throws Exception {
+        String body = get("/api/live").body();
+        assertTrue(body.contains("\"count\":"), "response must have count field");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

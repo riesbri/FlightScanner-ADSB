@@ -19,8 +19,14 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -104,6 +110,7 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
                             dataSource::getStats,
                             notifier::getDiscordStats,
                             flightsPersistedCount::get,
+                            dataSource::getCurrentFlights,
                             config);
                     webServer.start();
                 } catch (Exception e) {
@@ -118,6 +125,11 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
             executor.scheduleAtFixedRate(this::logStats, 30, 30, TimeUnit.SECONDS);
             executor.scheduleAtFixedRate(this::cleanupNotifiedFlights, 1, 1, TimeUnit.HOURS);
             executor.scheduleAtFixedRate(notifier::flushCoalescedSummary, 60, 60, TimeUnit.SECONDS);
+
+            int digestHour = config.getInt("discord.digest.hour", 20);
+            long initialDelaySeconds = secondsUntilHour(digestHour);
+            executor.scheduleAtFixedRate(this::sendDailyDigest,
+                    initialDelaySeconds, TimeUnit.DAYS.toSeconds(1), TimeUnit.SECONDS);
 
             log.info("ADSBFlightTracker started (notify level: {}). Listening for aircraft...",
                     config.getNotifyLevel());
@@ -219,9 +231,28 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
             return;
         }
 
-        notifier.sendAlert(flight);
+        String note = buildHelloAgainNote(flight);
+        notifier.sendAlert(flight, note);
         notifiedFlights.put(key, now);
         log.info("Notification sent for {}: {}", flight.flightNumber(), reason);
+    }
+
+    private String buildHelloAgainNote(Flight flight) {
+        if (flight.flightNumber() == null || flight.flightNumber().isBlank()) return null;
+        try {
+            Optional<LocalDate> lastSeen = repository.findLastSeen(
+                    flight.flightNumber(), flight.scheduledTime() != null
+                            ? flight.scheduledTime() : LocalDateTime.now());
+            if (lastSeen.isPresent()) {
+                long days = java.time.temporal.ChronoUnit.DAYS.between(lastSeen.get(), LocalDate.now());
+                if (days == 0) return "Last seen today";
+                if (days == 1) return "Last seen yesterday";
+                return "Last seen " + days + " days ago";
+            }
+        } catch (Exception e) {
+            log.debug("Could not compute hello-again note for {}: {}", flight.flightNumber(), e.getMessage());
+        }
+        return null;
     }
 
     private void maybeAlert(Flight flight) {
@@ -251,6 +282,24 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
         alertedFlights.values().removeIf(t -> t.isBefore(alertCutoff));
         int alertRemoved = alertBefore - alertedFlights.size();
         if (alertRemoved > 0) log.debug("Pruned {} expired entries from ALERT cooldown cache", alertRemoved);
+    }
+
+    private void sendDailyDigest() {
+        try {
+            LocalDate yesterday = LocalDate.now().minusDays(1);
+            List<Flight> flights = repository.findByDate(yesterday);
+            notifier.sendDailyDigest(flights, yesterday);
+        } catch (Exception e) {
+            log.error("Error sending daily digest: {}", e.getMessage());
+        }
+    }
+
+    private static long secondsUntilHour(int targetHour) {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
+        ZonedDateTime next = now.toLocalDate().atTime(LocalTime.of(targetHour, 0))
+                .atZone(ZoneId.systemDefault());
+        if (!next.isAfter(now)) next = next.plusDays(1);
+        return Duration.between(now, next).getSeconds();
     }
 
     private void persistFlights() {

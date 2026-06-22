@@ -7,6 +7,11 @@ public interface FlightNotifier {
     /** Send a NOTEWORTHY-tier notification embed for one flight. */
     void sendAlert(Flight flight);
 
+    /** Like {@link #sendAlert(Flight)} but includes an optional extra note (e.g. "Last seen 3 days ago"). */
+    default void sendAlert(Flight flight, String note) {
+        sendAlert(flight);
+    }
+
     /** Send an ALERT-tier notification — always one-per-aircraft, never batched. */
     default void sendCriticalAlert(Flight flight) {
         sendAlert(flight);  // fallback for non-Discord notifiers
@@ -24,4 +29,7 @@ public interface FlightNotifier {
      * disabled.
      */
     default void flushCoalescedSummary() {}
+
+    /** Post a daily digest summary embed. No-op by default. */
+    default void sendDailyDigest(java.util.List<Flight> flights, java.time.LocalDate date) {}
 }

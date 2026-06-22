@@ -53,14 +53,14 @@ git clone https://github.com/riesbri/FlightScanner.git
 cd FlightScanner
 
 # Build
-JAVA_HOME=/path/to/java-21 ./mvnw package -DskipTests -q
+JAVA_HOME=/path/to/java-21 mvn package -DskipTests -q
 
 # Configure
 echo 'DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."' > flightscanner.env
 chmod 600 flightscanner.env
 
 # Run
-java -cp target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar com.flightscanner.ADSBFlightTracker
+java -jar target/flightscanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 ```
 
 Open `http://localhost:3006/` for the dashboard.
@@ -188,10 +188,7 @@ for r in conn.execute('SELECT flight_number, aircraft, scheduled_time FROM fligh
 
 ## 🛠 Architecture
 
-Two top-level entry points share the rest of the code:
-
-- `com.flightscanner.ADSBFlightTracker` (active) — listens to the ADS-B stream, dispatches notifications.
-- `com.flightscanner.FlightTrackerApp` (legacy) — schedules `PlaywrightFlightScraper` against FlightRadar24 on `scraper.interval.minutes`.
+Entry point: `com.flightscanner.ADSBFlightTracker` — listens to the ADS-B stream, dispatches notifications.
 
 ```
 dump1090-fa :30003 (SBS CSV)
@@ -267,7 +264,7 @@ corresponding feature is enabled (e.g. webhook URL when
 ## 🧪 Development
 
 ```bash
-JAVA_HOME=/path/to/java-21 ./mvnw test
+JAVA_HOME=/path/to/java-21 mvn test
 ```
 
 JUnit 5 covers the classifier (`AircraftTypesTest`), analyzer
@@ -278,15 +275,14 @@ config (`ConfigManagerTest`), repo round-trip
 (`SqlFlightRepositoryTest`), and the HTTP server
 (`WebServerTest`).
 
-`test-build.sh` and `test-scraper.sh` smoke-launch the JAR for a
-few seconds.
+`test-build.sh` smoke-launches the JAR for a few seconds.
 
 ---
 
 ## 📋 Requirements
 
 - Java 21 (Temurin recommended)
-- Maven 3.8+ (or use the wrapper `./mvnw`)
+- Maven 3.8+
 - A `dump1090-fa` instance exposing the SBS feed on `localhost:30003`
 - A Discord webhook URL (only if `discord.enabled=true`)
 
@@ -311,7 +307,7 @@ nc localhost 30003 | head -3    # expect: MSG,3,...
 | `flightscanner.env` | Discord webhook URL (chmod 600, gitignored) |
 | `flights.db` | Persisted flight records (gitignored) |
 | `aircraft_cache.db` | Enrichment cache (gitignored) |
-| `target/FlightScraper-*-jar-with-dependencies.jar` | Built fat JAR |
+| `target/flightscanner-*-jar-with-dependencies.jar` | Built fat JAR |
 | `~/.config/systemd/user/flightscanner.service` | systemd unit (template in repo) |
 
 ---

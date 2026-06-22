@@ -128,6 +128,33 @@ class AircraftAlerterTest {
         assertFalse(alerter.isAlert(flight(null, 35000, "ABC123", null)));
     }
 
+    // ── Watchlist ────────────────────────────────────────────────────
+
+    @Test
+    void watchlistHexTriggers() {
+        AircraftAlerter watchAlerter = new AircraftAlerter(
+                Set.of("7700"), 1500, List.of(), List.of(), Set.of("DEADBE"));
+        Flight f = new Flight("TST2", "XXX", "C172", java.time.LocalDateTime.now(),
+                35000, 100, null, "DEADBE", "Some Airline");
+        assertTrue(watchAlerter.isWatchlisted(f));
+        assertTrue(watchAlerter.isAlert(f));
+    }
+
+    @Test
+    void watchlistMatchIsCaseInsensitive() {
+        AircraftAlerter watchAlerter = new AircraftAlerter(
+                Set.of(), 1500, List.of(), List.of(), Set.of("DEADBE"));
+        Flight f = flight(null, 35000, "deadbe", null);
+        assertTrue(watchAlerter.isWatchlisted(f));
+    }
+
+    @Test
+    void hexNotOnWatchlistDoesNotTriggerWatchlist() {
+        Flight f = flight(null, 35000, "FFFFFF", null);
+        // Package-private alerter has empty watchlist
+        assertFalse(alerter.isWatchlisted(f));
+    }
+
     // ── No triggers ─────────────────────────────────────────────────
 
     @Test

@@ -1,16 +1,13 @@
 #!/bin/bash
 
-# Test script for FlightTracker
-# Usage: ./test-build.sh [adsb|scraper]
+# Smoke-tests the fat JAR by launching it for 3 seconds and checking it starts cleanly.
+# Usage: ./test-build.sh
 
-MODE="${1:-scraper}"
+echo "=== FlightScanner Build Smoke Test ==="
 
-echo "=== Testing FlightTracker Build ==="
-echo "Mode: $MODE"
-echo ""
+JAR="target/flightscanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
 
-# Check if JAR exists
-if [ ! -f "target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar" ]; then
+if [ ! -f "$JAR" ]; then
     echo "Building project first..."
     mvn clean package -DskipTests -q
     if [ $? -ne 0 ]; then
@@ -19,31 +16,15 @@ if [ ! -f "target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar" ]; the
     fi
 fi
 
-echo "JAR file exists: target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
+echo "JAR: $JAR"
+echo "Note: Requires dump1090-fa running on port 30003"
 echo ""
 
-if [ "$MODE" = "adsb" ]; then
-    echo "Starting ADS-B mode..."
-    echo "Note: Requires dump1090-fa running on port 30003"
-    echo ""
-    java -jar target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar 2>&1 &
-    PID=$!
-    sleep 3
-    kill $PID 2>/dev/null
-    wait $PID 2>/dev/null
-elif [ "$MODE" = "scraper" ]; then
-    echo "Starting Web Scraper mode..."
-    echo "Note: Will attempt to scrape FlightRadar24 for airport VLC"
-    echo ""
-    java -jar target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar 2>&1 &
-    PID=$!
-    sleep 3
-    kill $PID 2>/dev/null
-    wait $PID 2>/dev/null
-else
-    echo "Usage: $0 [adsb|scraper]"
-    exit 1
-fi
+java -jar "$JAR" 2>&1 &
+PID=$!
+sleep 3
+kill $PID 2>/dev/null
+wait $PID 2>/dev/null
 
 echo ""
 echo "=== Test Complete ==="

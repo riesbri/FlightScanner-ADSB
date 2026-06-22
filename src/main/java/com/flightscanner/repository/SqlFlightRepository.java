@@ -278,6 +278,28 @@ public class SqlFlightRepository implements FlightRepository {
     }
     
     @Override
+    public java.util.Optional<java.time.LocalDate> findLastSeen(String flightNumber,
+                                                                  java.time.LocalDateTime before) {
+        String sql = isSQLite()
+            ? "SELECT MAX(scheduled_time) FROM flights WHERE flight_number = ? AND DATE(scheduled_time) < DATE(?)"
+            : "SELECT MAX(scheduled_time) FROM flights WHERE flight_number = ? AND DATE(scheduled_time) < DATE(?)";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, flightNumber);
+            ps.setString(2, before.format(formatter));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getString(1) != null) {
+                    return java.util.Optional.of(
+                        java.time.LocalDateTime.parse(rs.getString(1), formatter).toLocalDate());
+                }
+            }
+        } catch (SQLException e) {
+            log.warn("findLastSeen failed for {}: {}", flightNumber, e.getMessage());
+        }
+        return java.util.Optional.empty();
+    }
+
+    @Override
     public void close() {
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();
