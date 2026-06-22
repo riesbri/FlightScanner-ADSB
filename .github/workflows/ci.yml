@@ -21,4 +21,4 @@ jobs:
           cache: maven
 
       - name: Run tests
-        run: ./mvnw test -q
+        run: mvn test -q
