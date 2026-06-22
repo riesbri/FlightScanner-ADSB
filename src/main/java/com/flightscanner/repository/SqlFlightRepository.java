@@ -238,7 +238,7 @@ public class SqlFlightRepository implements FlightRepository {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
-            pstmt.setDate(1, Date.valueOf(date));
+            pstmt.setString(1, date.toString());
             
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {

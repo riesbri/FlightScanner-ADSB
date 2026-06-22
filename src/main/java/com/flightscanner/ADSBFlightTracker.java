@@ -112,6 +112,7 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
                             flightsPersistedCount::get,
                             dataSource::getCurrentFlights,
                             config);
+                    webServer.setDigestTrigger(this::sendDailyDigestForDate);
                     webServer.start();
                 } catch (Exception e) {
                     log.error("Failed to start WebServer: {}", e.getMessage());
@@ -285,12 +286,19 @@ public class ADSBFlightTracker implements ADSBListener, AutoCloseable {
     }
 
     private void sendDailyDigest() {
+        sendDailyDigestForDate(LocalDate.now().minusDays(1));
+    }
+
+    public void sendDailyDigestForDate(LocalDate date) {
         try {
-            LocalDate yesterday = LocalDate.now().minusDays(1);
-            List<Flight> flights = repository.findByDate(yesterday);
-            notifier.sendDailyDigest(flights, yesterday);
+            List<Flight> flights = repository.findByDate(date);
+            if (flights.isEmpty()) {
+                log.info("Daily digest skipped for {} — no flights recorded", date);
+                return;
+            }
+            notifier.sendDailyDigest(flights, date);
         } catch (Exception e) {
-            log.error("Error sending daily digest: {}", e.getMessage());
+            log.error("Error sending daily digest for {}: {}", date, e.getMessage());
         }
     }
 

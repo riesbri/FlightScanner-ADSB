@@ -46,6 +46,7 @@ public class WebServer implements AutoCloseable {
     private final LongSupplier flightsPersistedSupplier;
     private final Supplier<List<Flight>> liveFlightsSupplier;
     private final AircraftAlerter alerter;
+    private java.util.function.Consumer<java.time.LocalDate> digestTrigger = null;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Instant startedAt = Instant.now();
     private final double mapLat;
@@ -73,11 +74,12 @@ public class WebServer implements AutoCloseable {
                 ? new InetSocketAddress(port)
                 : new InetSocketAddress(host, port);
         this.server = HttpServer.create(addr, 0);
-        this.server.createContext("/metrics",     this::handleMetrics);
-        this.server.createContext("/api/flights", this::handleApiFlights);
-        this.server.createContext("/api/live",    this::handleApiLive);
-        this.server.createContext("/health",      this::handleHealth);
-        this.server.createContext("/",            this::handleHtml);
+        this.server.createContext("/metrics",             this::handleMetrics);
+        this.server.createContext("/api/flights",         this::handleApiFlights);
+        this.server.createContext("/api/live",            this::handleApiLive);
+        this.server.createContext("/api/debug/digest",    this::handleDebugDigest);
+        this.server.createContext("/health",              this::handleHealth);
+        this.server.createContext("/",                    this::handleHtml);
         this.server.setExecutor(Executors.newFixedThreadPool(4, r -> {
             Thread t = new Thread(r, "webserver");
             t.setDaemon(true);
@@ -105,6 +107,11 @@ public class WebServer implements AutoCloseable {
         return server.getAddress().getPort();
     }
 
+    /** Called by ADSBFlightTracker after construction to wire up the digest trigger. */
+    public void setDigestTrigger(java.util.function.Consumer<java.time.LocalDate> trigger) {
+        this.digestTrigger = trigger;
+    }
+
     // ── Handlers ────────────────────────────────────────────────────────────
 
     private void handleHealth(HttpExchange ex) {
@@ -120,6 +127,26 @@ public class WebServer implements AutoCloseable {
             sendResponse(ex, 200, "application/json", body.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Error serving /health: {}", e.getMessage());
+            sendError(ex, e);
+        }
+    }
+
+    private void handleDebugDigest(HttpExchange ex) {
+        try {
+            if (digestTrigger == null) {
+                byte[] body = "{\"error\":\"digest trigger not wired up\"}".getBytes(StandardCharsets.UTF_8);
+                sendResponse(ex, 503, "application/json", body);
+                return;
+            }
+            Map<String, String> params = parseQuery(ex.getRequestURI().getRawQuery());
+            java.time.LocalDate date = params.containsKey("date")
+                    ? java.time.LocalDate.parse(params.get("date"))
+                    : java.time.LocalDate.now();
+            java.util.function.Consumer<java.time.LocalDate> trigger = digestTrigger;
+            new Thread(() -> trigger.accept(date), "digest-manual").start();
+            byte[] body = ("{\"status\":\"digest triggered\",\"date\":\"" + date + "\"}").getBytes(StandardCharsets.UTF_8);
+            sendResponse(ex, 200, "application/json", body);
+        } catch (Exception e) {
             sendError(ex, e);
         }
     }
