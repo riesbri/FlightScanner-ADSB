@@ -300,6 +300,31 @@ public class SqlFlightRepository implements FlightRepository {
     }
 
     @Override
+    public List<Flight> findByDateRange(LocalDateTime from, LocalDateTime to) {
+        String sql = from == null
+            ? "SELECT * FROM flights WHERE typeof(scheduled_time) = 'text'"
+              + " AND scheduled_time < ? ORDER BY scheduled_time DESC LIMIT 10000"
+            : "SELECT * FROM flights WHERE typeof(scheduled_time) = 'text'"
+              + " AND scheduled_time >= ? AND scheduled_time < ? ORDER BY scheduled_time DESC LIMIT 10000";
+        List<Flight> result = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            if (from == null) {
+                ps.setString(1, to.format(formatter));
+            } else {
+                ps.setString(1, from.format(formatter));
+                ps.setString(2, to.format(formatter));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) result.add(mapResultSetToFlight(rs));
+            }
+        } catch (SQLException e) {
+            log.error("findByDateRange error: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    @Override
     public void close() {
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();

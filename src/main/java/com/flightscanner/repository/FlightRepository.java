@@ -54,6 +54,14 @@ public interface FlightRepository {
     }
 
     /**
+     * Get flights within an explicit datetime range (inclusive from, exclusive to).
+     * Only TEXT-format scheduled_time rows are returned (guards against legacy epoch-millis rows).
+     */
+    default List<Flight> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        return java.util.List.of();
+    }
+
+    /**
      * Close the repository and release resources
      */
     void close();

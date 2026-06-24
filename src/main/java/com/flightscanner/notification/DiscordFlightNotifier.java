@@ -167,7 +167,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
     }
 
     private void sendWebhook(String payload) {
-        if (doPost(payload, "message")) log.info("Discord message sent successfully");
+        doPost(payload, "message");
     }
 
     private boolean doPost(String payload, String description) {
