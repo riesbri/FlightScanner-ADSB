@@ -40,13 +40,13 @@ class AirportCoordsTest {
     // ── Resolve fallback chain ───────────────────────────────────────
 
     @Test
-    void resolveReturnsTableEntryForVlc() {
-        // ConfigManager default has airport.code=VLC, no lat/lon overrides
+    void resolveReturnsTableEntryForMad() {
+        // ConfigManager default has airport.code=MAD, no lat/lon overrides
         AirportCoords coords = AirportCoords.resolve(com.flightscanner.config.ConfigManager.getInstance());
         assertNotNull(coords);
-        assertEquals("VLC", coords.code());
-        assertEquals(39.4893, coords.lat(), 0.001);
-        assertEquals(-0.4815, coords.lon(), 0.001);
+        assertEquals("MAD", coords.code());
+        assertEquals(40.4936, coords.lat(), 0.001);
+        assertEquals(-3.5668, coords.lon(), 0.001);
         com.flightscanner.config.ConfigManager.reset();
     }
 

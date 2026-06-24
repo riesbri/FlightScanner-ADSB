@@ -66,7 +66,7 @@ java -jar target/flightscanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 
 Open `http://localhost:3006/` for the dashboard.
 
-> **Not in Spain?** The default airport is VLC (Valencia). Set `airport.code` to your nearest IATA code in `application.properties`, or override with exact coordinates using `airport.coordinates.lat` / `airport.coordinates.lon` — see [Airport proximity filter](#-airport-proximity-filter) below.
+> **Not near Madrid?** The default airport is MAD (Madrid-Barajas). Set `airport.code` to your nearest IATA code in `application.properties`, or override with exact coordinates using `airport.coordinates.lat` / `airport.coordinates.lon` — see [Airport proximity filter](#-airport-proximity-filter) below.
 
 ---
 
@@ -113,13 +113,13 @@ Edit one file to add a type, the rest follows.
 
 Flights outside `airport.radius.nm` (default: 100 NM) of the configured
 airport are dropped **before** notification and **before** persistence.
-Default `airport.code=VLC` (Valencia); a small Spanish airport table
-(VLC / MAD / BCN / SVQ / ALC) ships in `geo/AirportCoords.java`. Override
+Default `airport.code=MAD` (Madrid-Barajas); a Spanish airport table
+ships in `geo/AirportCoords.java` (MAD, VLC, BCN, SVQ, and more). Override
 with `airport.coordinates.lat` / `airport.coordinates.lon` for any
 location — both must be set.
 
 ```properties
-airport.code=VLC
+airport.code=MAD
 airport.radius.nm=100
 airport.filter.require-position=false
 ```
@@ -261,7 +261,7 @@ Notable settings:
 | `adsb.alert.military.operators` | list | Substrings matched against enriched operator |
 | `adsb.alert.cooldown.minutes` | `5` | Per-aircraft ALERT cooldown |
 | `adsb.watchlist.hex` | `` | Comma-separated ICAO hex codes to always ALERT on |
-| `airport.code` | `VLC` | IATA code for the proximity filter |
+| `airport.code` | `MAD` | IATA code for the proximity filter |
 | `airport.radius.nm` | `100` | Proximity filter radius |
 | `discord.digest.hour` | `20` | Hour (24h local) to post the previous day's summary |
 | `webui.enabled` | `true` | Built-in HTTP server on :3006 |

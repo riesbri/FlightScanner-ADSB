@@ -67,8 +67,8 @@ public class WebServer implements AutoCloseable {
         this.alerter = new AircraftAlerter(config);
 
         AirportCoords coords = AirportCoords.resolve(config);
-        this.mapLat = (coords != null) ? coords.lat() : 39.49;
-        this.mapLon = (coords != null) ? coords.lon() : -0.48;
+        this.mapLat = (coords != null) ? coords.lat() : 40.47;
+        this.mapLon = (coords != null) ? coords.lon() : -3.56;
 
         InetSocketAddress addr = ("0.0.0.0".equals(host) || host == null || host.isBlank())
                 ? new InetSocketAddress(port)

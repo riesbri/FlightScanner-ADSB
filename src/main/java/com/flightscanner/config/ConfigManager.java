@@ -53,7 +53,7 @@ public class ConfigManager {
         this.properties = loadProperties();
         
         // Airport
-        this.airportCode = getString("airport.code", "VLC");
+        this.airportCode = getString("airport.code", "MAD");
 
         // Database
         this.dbType = getString("db.type", "sqlite");
