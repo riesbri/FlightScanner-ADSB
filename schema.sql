@@ -1,7 +1,7 @@
 -- NOTE: This file is not used by the application.
 --
 -- The real schema is created at runtime by SqlFlightRepository.initialize()
--- (src/main/java/com/richi/repository/SqlFlightRepository.java), which emits
+-- (src/main/java/com/flightscanner/repository/SqlFlightRepository.java), which emits
 -- dialect-specific DDL for the configured db.type (SQLite by default, MySQL
 -- optionally) and migrates existing databases via ALTER TABLE ADD COLUMN.
 --
