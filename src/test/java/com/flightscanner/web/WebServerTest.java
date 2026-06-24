@@ -56,6 +56,7 @@ class WebServerTest {
                 () -> fixedStats,
                 () -> fixedDiscord,
                 () -> 678L,
+                List::of,
                 config);
         server.start();
         baseUrl = "http://localhost:" + server.getPort();
@@ -192,33 +193,113 @@ class WebServerTest {
     }
 
     @Test @Order(17)
-    void homePageContainsRefreshMeta() throws Exception {
+    void homePageHasNoAutoRefresh() throws Exception {
         String body = get("/").body();
-        assertTrue(body.contains("http-equiv=\"refresh\""), "HTML must auto-refresh");
-        assertTrue(body.contains("content=\"30\""), "refresh interval should be 30s");
+        assertFalse(body.contains("http-equiv=\"refresh\""), "HTML must not auto-refresh (map uses JS polling)");
     }
 
     @Test @Order(18)
     void homePageContainsTable() throws Exception {
         String body = get("/").body();
         assertTrue(body.contains("<table"), "HTML must contain a table");
-        assertTrue(body.contains("<th>Flight</th>"), "table must have Flight column");
-        assertTrue(body.contains("<th>Aircraft</th>"), "table must have Aircraft column");
+        assertTrue(body.contains("Flight</th>"), "table must have Flight column");
+        assertTrue(body.contains("Aircraft</th>"), "table must have Aircraft column");
     }
 
     @Test @Order(19)
-    void homePageContainsNoteworthyFlights() throws Exception {
+    void homePageContainsSearchUI() throws Exception {
         String body = get("/").body();
-        // B77W widebody should appear, commercial A320 should not
-        assertTrue(body.contains("RYR123"), "widebody flight should appear in HTML");
-        assertFalse(body.contains("VLG123"), "commercial flight should not appear in HTML");
+        assertTrue(body.contains("id=\"flights-tbody\""), "page must have flights table body");
+        assertTrue(body.contains("id=\"search-controls\""), "page must have search controls");
+        assertTrue(body.contains("id=\"flights-table\""), "page must have flights table");
+        // flights are loaded client-side; RYR123 must not be in the initial HTML shell
+        assertFalse(body.contains("RYR123"), "flights must not be server-rendered in the HTML shell");
     }
 
     @Test @Order(20)
-    void homePageContainsFooterWithLink() throws Exception {
+    void homePageContainsSidebarLinks() throws Exception {
         String body = get("/").body();
-        assertTrue(body.contains("Last refresh"), "footer should show last refresh time");
-        assertTrue(body.contains("/api/flights"), "footer should link to JSON API");
+        assertTrue(body.contains("refreshTime"), "page must embed refresh timestamp in Alpine state");
+        assertTrue(body.contains("/api/flights"), "sidebar must link to JSON API");
+        assertTrue(body.contains("/metrics"), "sidebar must link to metrics");
+    }
+
+    @Test @Order(21)
+    void homePageContainsLeafletMap() throws Exception {
+        String body = get("/").body();
+        assertTrue(body.contains("leaflet"), "HTML must include Leaflet.js map");
+        assertTrue(body.contains("id=\"map\""), "HTML must have map div");
+    }
+
+    // ── /health ──────────────────────────────────────────────────────────────
+
+    @Test @Order(22)
+    void healthReturns200() throws Exception {
+        assertEquals(200, get("/health").statusCode());
+    }
+
+    @Test @Order(23)
+    void healthContentTypeIsJson() throws Exception {
+        String ct = get("/health").headers().firstValue("Content-Type").orElse("");
+        assertEquals("application/json", ct);
+    }
+
+    @Test @Order(24)
+    void healthBodyHasRequiredFields() throws Exception {
+        String body = get("/health").body();
+        assertAll(
+                () -> assertTrue(body.contains("\"status\":\"ok\""),       "missing status:ok"),
+                () -> assertTrue(body.contains("\"uptime_s\":"),           "missing uptime_s"),
+                () -> assertTrue(body.contains("\"connected\":"),          "missing connected"),
+                () -> assertTrue(body.contains("\"aircraft_tracked\":"),   "missing aircraft_tracked")
+        );
+    }
+
+    // ── /api/live ────────────────────────────────────────────────────────────
+
+    @Test @Order(25)
+    void apiLiveReturns200() throws Exception {
+        assertEquals(200, get("/api/live").statusCode());
+    }
+
+    @Test @Order(26)
+    void apiLiveContentTypeIsJson() throws Exception {
+        String ct = get("/api/live").headers().firstValue("Content-Type").orElse("");
+        assertEquals("application/json", ct);
+    }
+
+    @Test @Order(27)
+    void apiLiveResponseHasCountField() throws Exception {
+        String body = get("/api/live").body();
+        assertTrue(body.contains("\"count\":"), "response must have count field");
+    }
+
+    // ── /api/flights?from=&to= ───────────────────────────────────────────────
+
+    @Test @Order(28)
+    void apiFlightsFromToReturns200() throws Exception {
+        String from = LocalDate.now().minusDays(7).toString();
+        String to   = LocalDate.now().toString();
+        assertEquals(200, get("/api/flights?from=" + from + "&to=" + to).statusCode());
+    }
+
+    @Test @Order(29)
+    void apiFlightsFromToResponseHasFromToFields() throws Exception {
+        String from = LocalDate.now().minusDays(7).toString();
+        String to   = LocalDate.now().toString();
+        String body = get("/api/flights?from=" + from + "&to=" + to).body();
+        assertTrue(body.contains("\"from\":"), "response must have from field");
+        assertTrue(body.contains("\"to\":"),   "response must have to field");
+        assertTrue(body.contains("\"count\":"), "response must have count field");
+    }
+
+    @Test @Order(30)
+    void apiFlightsFromToFlightsHaveTierField() throws Exception {
+        String from = LocalDate.now().minusDays(7).toString();
+        String to   = LocalDate.now().toString();
+        String body = get("/api/flights?from=" + from + "&to=" + to + "&tier=all").body();
+        // stub returns all test flights; at least one should carry a tier value
+        assertTrue(body.contains("\"tier\":"), "each flight must include computed tier");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -242,6 +323,7 @@ class WebServerTest {
         @Override public Optional<Flight> findByFlightNumberAndTime(String fn, String st) { return Optional.empty(); }
         @Override public List<Flight> findByDate(LocalDate date) { return data; }
         @Override public List<Flight> findRecent(int hoursBack) { return data; }
+        @Override public List<Flight> findByDateRange(LocalDateTime from, LocalDateTime to) { return data; }
         @Override public void close() {}
     }
 }

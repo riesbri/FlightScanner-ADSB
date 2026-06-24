@@ -2,8 +2,6 @@ package com.flightscanner.analyzer;
 
 import com.flightscanner.model.Flight;
 
-import java.util.List;
-
 public interface AircraftAnalyzerService {
 
     boolean isWidebody(String aircraftType);
@@ -16,6 +14,4 @@ public interface AircraftAnalyzerService {
     default boolean isAlert(Flight flight) {
         return false;
     }
-
-    List<Flight> analyzeFlights(List<Flight> flights);
 }

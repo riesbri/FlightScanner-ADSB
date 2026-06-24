@@ -4,8 +4,6 @@ import com.flightscanner.config.ConfigManager;
 import com.flightscanner.model.Flight;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.List;
-
 @Slf4j
 public class LocalAircraftAnalyzer implements AircraftAnalyzerService {
 
@@ -41,12 +39,5 @@ public class LocalAircraftAnalyzer implements AircraftAnalyzerService {
     @Override
     public boolean isAlert(Flight flight) {
         return alerter.isAlert(flight);
-    }
-
-    @Override
-    public List<Flight> analyzeFlights(List<Flight> flights) {
-        return flights.stream()
-                .filter(f -> isInteresting(f.aircraft()))
-                .toList();
     }
 }

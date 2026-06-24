@@ -238,7 +238,7 @@ public class SqlFlightRepository implements FlightRepository {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
-            pstmt.setDate(1, Date.valueOf(date));
+            pstmt.setString(1, date.toString());
             
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
@@ -277,6 +277,53 @@ public class SqlFlightRepository implements FlightRepository {
         return flights;
     }
     
+    @Override
+    public java.util.Optional<java.time.LocalDate> findLastSeen(String flightNumber,
+                                                                  java.time.LocalDateTime before) {
+        String sql = isSQLite()
+            ? "SELECT MAX(scheduled_time) FROM flights WHERE flight_number = ? AND DATE(scheduled_time) < DATE(?)"
+            : "SELECT MAX(scheduled_time) FROM flights WHERE flight_number = ? AND DATE(scheduled_time) < DATE(?)";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, flightNumber);
+            ps.setString(2, before.format(formatter));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getString(1) != null) {
+                    return java.util.Optional.of(
+                        java.time.LocalDateTime.parse(rs.getString(1), formatter).toLocalDate());
+                }
+            }
+        } catch (SQLException e) {
+            log.warn("findLastSeen failed for {}: {}", flightNumber, e.getMessage());
+        }
+        return java.util.Optional.empty();
+    }
+
+    @Override
+    public List<Flight> findByDateRange(LocalDateTime from, LocalDateTime to) {
+        String sql = from == null
+            ? "SELECT * FROM flights WHERE typeof(scheduled_time) = 'text'"
+              + " AND scheduled_time < ? ORDER BY scheduled_time DESC LIMIT 10000"
+            : "SELECT * FROM flights WHERE typeof(scheduled_time) = 'text'"
+              + " AND scheduled_time >= ? AND scheduled_time < ? ORDER BY scheduled_time DESC LIMIT 10000";
+        List<Flight> result = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            if (from == null) {
+                ps.setString(1, to.format(formatter));
+            } else {
+                ps.setString(1, from.format(formatter));
+                ps.setString(2, to.format(formatter));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) result.add(mapResultSetToFlight(rs));
+            }
+        } catch (SQLException e) {
+            log.error("findByDateRange error: {}", e.getMessage());
+        }
+        return result;
+    }
+
     @Override
     public void close() {
         if (dataSource != null && !dataSource.isClosed()) {

@@ -25,6 +25,7 @@ public class AircraftAlerter {
     private final int lowAltitudeFeet;
     private final List<int[]> govHexRanges;          // pairs of [low, high] inclusive
     private final List<String> militaryKeywords;     // lowercase, for contains() check
+    private final Set<String> watchlistHex;          // uppercase hex codes to always alert on
 
     public AircraftAlerter(ConfigManager config) {
         String squawksStr = config.getString("adsb.alert.emergency.squawks", "7500,7600,7700");
@@ -42,25 +43,44 @@ public class AircraftAlerter {
                 .map(String::trim).map(String::toLowerCase)
                 .filter(s -> !s.isEmpty()).collect(Collectors.toList());
 
-        log.info("AircraftAlerter initialized: {} squawks, low-alt={}ft, {} gov ranges, {} mil keywords",
-                emergencySquawks.size(), lowAltitudeFeet, govHexRanges.size(), militaryKeywords.size());
+        String watchlistStr = config.getString("adsb.watchlist.hex", "");
+        this.watchlistHex = Arrays.stream(watchlistStr.split(","))
+                .map(String::trim).map(String::toUpperCase)
+                .filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+
+        log.info("AircraftAlerter initialized: {} squawks, low-alt={}ft, {} gov ranges, {} mil keywords, {} watchlist",
+                emergencySquawks.size(), lowAltitudeFeet, govHexRanges.size(), militaryKeywords.size(), watchlistHex.size());
     }
 
     /** Package-private constructor for tests — bypasses config parsing. */
     AircraftAlerter(Set<String> emergencySquawks, int lowAltitudeFeet,
                     List<int[]> govHexRanges, List<String> militaryKeywords) {
+        this(emergencySquawks, lowAltitudeFeet, govHexRanges, militaryKeywords, Set.of());
+    }
+
+    /** Package-private constructor for tests — includes watchlist. */
+    AircraftAlerter(Set<String> emergencySquawks, int lowAltitudeFeet,
+                    List<int[]> govHexRanges, List<String> militaryKeywords,
+                    Set<String> watchlistHex) {
         this.emergencySquawks = emergencySquawks;
         this.lowAltitudeFeet  = lowAltitudeFeet;
         this.govHexRanges     = govHexRanges;
         this.militaryKeywords = militaryKeywords;
+        this.watchlistHex     = watchlistHex;
     }
 
     public boolean isAlert(Flight flight) {
+        if (isWatchlisted(flight))        return true;
         if (isEmergencySquawk(flight))    return true;
         if (isLowAltitude(flight))        return true;
         if (isInGovHexRange(flight))      return true;
         if (isMilitaryOperator(flight))   return true;
         return false;
+    }
+
+    public boolean isWatchlisted(Flight flight) {
+        if (flight.hexIdent() == null || flight.hexIdent().isBlank()) return false;
+        return watchlistHex.contains(flight.hexIdent().trim().toUpperCase());
     }
 
     private boolean isEmergencySquawk(Flight flight) {

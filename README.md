@@ -35,9 +35,10 @@ You point a `dump1090-fa` SDR dongle at the sky. FlightScanner:
 2. **Enriches** every new ICAO hex once via `adsb.lol` (cached forever)
 3. **Classifies** aircraft into categories — widebody / military / bizjet / commercial
 4. **Filters** by airport proximity (default: 100 NM of a configured IATA code)
-5. **Notifies** Discord in three tiers: 🚨 ALERT, 🛫 NOTEWORTHY, ✈️ ALL
+5. **Notifies** Discord in three tiers: 🚨 ALERT, 🛫 NOTEWORTHY, ✈️ ALL — with country flag emoji from ICAO hex and "last seen N days ago" notes
 6. **Persists** every in-range flight to SQLite every 5 minutes
-7. **Serves** a built-in HTTP dashboard on `:3006` — HTML, JSON, Prometheus metrics
+7. **Posts** a daily digest at a configurable hour summarising widebody / military / bizjet counts
+8. **Serves** a built-in HTTP dashboard on `:3006` — live Leaflet map, HTML table, JSON API, Prometheus metrics, health check
 
 No LLM. No cloud. No account. Pure local signal.
 
@@ -53,14 +54,14 @@ git clone https://github.com/riesbri/FlightScanner.git
 cd FlightScanner
 
 # Build
-JAVA_HOME=/path/to/java-21 ./mvnw package -DskipTests -q
+JAVA_HOME=/path/to/java-21 mvn package -DskipTests -q
 
 # Configure
 echo 'DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."' > flightscanner.env
 chmod 600 flightscanner.env
 
 # Run
-java -cp target/FlightScraper-0.0.1-SNAPSHOT-jar-with-dependencies.jar com.flightscanner.ADSBFlightTracker
+java -jar target/flightscanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 ```
 
 Open `http://localhost:3006/` for the dashboard.
@@ -135,13 +136,18 @@ no extra dependency). Toggle with `webui.enabled=false`.
 
 | Endpoint | Returns |
 |---|---|
-| `GET /` | Dark-mode HTML dashboard (auto-refresh 30s, last 50 noteworthy flights) |
+| `GET /` | Dark-mode HTML with a **live Leaflet map** (aircraft markers, 30s auto-refresh) + last 50 noteworthy flights |
+| `GET /api/live` | JSON array of all currently tracked aircraft with lat/lon/flag — powers the map |
+| `GET /api/flights?since=<ISO>&tier=all\|noteworthy\|alert` | Historical flights from SQLite as JSON |
 | `GET /metrics` | Prometheus text format (`text/plain; version=0.0.4`) |
-| `GET /api/flights?since=<ISO>&tier=all\|noteworthy\|alert` | JSON |
+| `GET /health` | `{"status":"ok","uptime_s":…,"last_message_ago_s":…,"connected":…,"aircraft_tracked":…}` |
 
 ```bash
-# Live metrics
-curl -s http://localhost:3006/metrics
+# Health check (e.g. for UptimeRobot)
+curl -s http://localhost:3006/health
+
+# Live aircraft with positions
+curl -s http://localhost:3006/api/live
 
 # Today's noteworthy flights as JSON
 curl -s "http://localhost:3006/api/flights"
@@ -188,10 +194,7 @@ for r in conn.execute('SELECT flight_number, aircraft, scheduled_time FROM fligh
 
 ## 🛠 Architecture
 
-Two top-level entry points share the rest of the code:
-
-- `com.flightscanner.ADSBFlightTracker` (active) — listens to the ADS-B stream, dispatches notifications.
-- `com.flightscanner.FlightTrackerApp` (legacy) — schedules `PlaywrightFlightScraper` against FlightRadar24 on `scraper.interval.minutes`.
+Entry point: `com.flightscanner.ADSBFlightTracker` — listens to the ADS-B stream, dispatches notifications.
 
 ```
 dump1090-fa :30003 (SBS CSV)
@@ -210,22 +213,25 @@ Dump1090DataSource ── parses SBS via SBSMessage, maintains aircraftMap
      │
      ▼
 ADSBFlightTracker (ADSBListener)
-     ├── onAircraftDetected → AirportCoords proximity filter → LocalAircraftAnalyzer.isInteresting? → DiscordFlightNotifier
+     ├── onAircraftDetected → AirportCoords proximity filter → AircraftAlerter / LocalAircraftAnalyzer → DiscordFlightNotifier
      │       (aircraft outside airport.radius.nm are dropped before notify OR persist)
+     │       (NOTEWORTHY embeds include country flag emoji + "last seen N days ago" note)
      ├── every adsb.save.interval.minutes  → SqlFlightRepository.saveFlights (only in-range flights)
      ├── every 60s                         → DiscordFlightNotifier.flushCoalescedSummary (rate-limit overflow)
-     ├── every 1h                          → prunes expired entries from notifiedFlights cooldown map
-     └── (startup, if webui.enabled=true)  → WebServer on :3006 serving /, /metrics, /api/flights
+     ├── every 1h                          → prunes expired entries from cooldown maps
+     ├── daily at discord.digest.hour      → sendDailyDigest (widebody/military/bizjet counts for yesterday)
+     └── (startup, if webui.enabled=true)  → WebServer on :3006 serving /, /api/live, /api/flights, /metrics, /health
 ```
 
 Key components:
 
 - **`adsb/`** — `ADSBDataSource` interface + `Dump1090DataSource` socket client; `SBSMessage` parses BaseStation CSV; `ADSBListener` callback contract.
 - **`analyzer/LocalAircraftAnalyzer`** — classifies by ICAO type via the shared `AircraftTypes.AircraftCategory` enum.
-- **`analyzer/AircraftAlerter`** — evaluates ALERT-tier triggers (squawk, altitude, hex range, operator keyword), all config-driven.
-- **`notification/DiscordFlightNotifier`** — webhook embeds; category emoji + color from the same enum the analyzer uses.
-- **`repository/SqlFlightRepository`** — JDBC + HikariCP. SQLite (default) and MySQL supported via `db.type`.
-- **`web/WebServer`** — JDK `com.sun.net.httpserver`; serves `/`, `/metrics`, `/api/flights`. Zero extra deps.
+- **`analyzer/AircraftAlerter`** — evaluates ALERT-tier triggers (squawk, altitude, hex range, operator keyword, watchlist hex), all config-driven.
+- **`geo/ICAOCountry`** — static lookup: ICAO hex prefix → country flag emoji + name, used in Discord embeds and `/api/live`.
+- **`notification/DiscordFlightNotifier`** — webhook embeds; flag + "last seen" note on NOTEWORTHY; daily digest via `sendDailyDigest()`.
+- **`repository/SqlFlightRepository`** — JDBC + HikariCP. SQLite (default) and MySQL supported via `db.type`. `findLastSeen()` powers the "hello again" embed note.
+- **`web/WebServer`** — JDK `com.sun.net.httpserver`; serves `/` (Leaflet map + table), `/api/live` (live aircraft JSON), `/api/flights`, `/metrics`, `/health`. Zero extra deps.
 
 ---
 
@@ -254,8 +260,10 @@ Notable settings:
 | `adsb.alert.gov.hex.ranges` | `0x348000-0x34FFFF` | Government ICAO hex ranges |
 | `adsb.alert.military.operators` | list | Substrings matched against enriched operator |
 | `adsb.alert.cooldown.minutes` | `5` | Per-aircraft ALERT cooldown |
+| `adsb.watchlist.hex` | `` | Comma-separated ICAO hex codes to always ALERT on |
 | `airport.code` | `VLC` | IATA code for the proximity filter |
 | `airport.radius.nm` | `100` | Proximity filter radius |
+| `discord.digest.hour` | `20` | Hour (24h local) to post the previous day's summary |
 | `webui.enabled` | `true` | Built-in HTTP server on :3006 |
 
 `ConfigManager.validate()` enforces required values when the
@@ -267,26 +275,25 @@ corresponding feature is enabled (e.g. webhook URL when
 ## 🧪 Development
 
 ```bash
-JAVA_HOME=/path/to/java-21 ./mvnw test
+JAVA_HOME=/path/to/java-21 mvn test
 ```
 
 JUnit 5 covers the classifier (`AircraftTypesTest`), analyzer
 (`LocalAircraftAnalyzerTest`), SBS parsing (`SBSMessageParseTest`),
-ALERT tier (`AircraftAlerterTest`), rate limiter
+ALERT tier + watchlist (`AircraftAlerterTest`), rate limiter
 (`DiscordRateLimiterTest`), airport filter (`AirportFilterTest`),
-config (`ConfigManagerTest`), repo round-trip
-(`SqlFlightRepositoryTest`), and the HTTP server
-(`WebServerTest`).
+country flag lookup (`ICAOCountryTest`), config (`ConfigManagerTest`),
+repo round-trip (`SqlFlightRepositoryTest`), and the HTTP server
+including `/health` and `/api/live` (`WebServerTest`).
 
-`test-build.sh` and `test-scraper.sh` smoke-launch the JAR for a
-few seconds.
+`test-build.sh` smoke-launches the JAR for a few seconds.
 
 ---
 
 ## 📋 Requirements
 
 - Java 21 (Temurin recommended)
-- Maven 3.8+ (or use the wrapper `./mvnw`)
+- Maven 3.8+
 - A `dump1090-fa` instance exposing the SBS feed on `localhost:30003`
 - A Discord webhook URL (only if `discord.enabled=true`)
 
@@ -311,7 +318,7 @@ nc localhost 30003 | head -3    # expect: MSG,3,...
 | `flightscanner.env` | Discord webhook URL (chmod 600, gitignored) |
 | `flights.db` | Persisted flight records (gitignored) |
 | `aircraft_cache.db` | Enrichment cache (gitignored) |
-| `target/FlightScraper-*-jar-with-dependencies.jar` | Built fat JAR |
+| `target/flightscanner-*-jar-with-dependencies.jar` | Built fat JAR |
 | `~/.config/systemd/user/flightscanner.service` | systemd unit (template in repo) |
 
 ---

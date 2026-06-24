@@ -17,12 +17,7 @@ public class ConfigManager {
     
     // Airport settings
     private final String airportCode;
-    private final int scrapeIntervalMinutes;
-    
-    // Scraper settings
-    private final int maxRetries;
-    private final int retryDelaySeconds;
-    
+
     // Database settings
     private final String dbType;
     private final String dbUrl;
@@ -59,12 +54,7 @@ public class ConfigManager {
         
         // Airport
         this.airportCode = getString("airport.code", "VLC");
-        this.scrapeIntervalMinutes = getInt("scraper.interval.minutes", 60);
-        
-        // Scraper
-        this.maxRetries = getInt("scraper.max.retries", 3);
-        this.retryDelaySeconds = getInt("scraper.retry.delay.seconds", 5);
-        
+
         // Database
         this.dbType = getString("db.type", "sqlite");
         if ("sqlite".equalsIgnoreCase(dbType)) {
@@ -163,19 +153,7 @@ public class ConfigManager {
     public String getAirportCode() {
         return airportCode;
     }
-    
-    public int getScrapeIntervalMinutes() {
-        return scrapeIntervalMinutes;
-    }
-    
-    public int getMaxRetries() {
-        return maxRetries;
-    }
-    
-    public int getRetryDelaySeconds() {
-        return retryDelaySeconds;
-    }
-    
+
     public boolean isDiscordEnabled() {
         return discordEnabled;
     }

@@ -2,6 +2,7 @@ package com.flightscanner.notification;
 
 import com.flightscanner.analyzer.AircraftTypes;
 import com.flightscanner.config.ConfigManager;
+import com.flightscanner.geo.ICAOCountry;
 import com.flightscanner.model.Flight;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
@@ -87,6 +88,11 @@ public class DiscordFlightNotifier implements FlightNotifier {
 
     @Override
     public void sendAlert(Flight flight) {
+        sendAlert(flight, null);
+    }
+
+    @Override
+    public void sendAlert(Flight flight, String note) {
         if (!enabled) return;
         if (!rateLimiter.tryAcquire()) {
             if (rateLimiter.isCoalesceEnabled()) {
@@ -97,7 +103,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
             }
             return;
         }
-        String payload = String.format("{\"embeds\": [%s]}", buildEmbedObject(flight));
+        String payload = String.format("{\"embeds\": [%s]}", buildEmbedObject(flight, note));
         sendWebhook(payload);
         notificationsSent.incrementAndGet();
         lastSendAt = java.time.Instant.now();
@@ -143,7 +149,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
     @Override
     public void sendBatchAlert(List<Flight> flights) {
         if (!enabled || flights.isEmpty()) return;
-        var objects = flights.stream().map(this::buildEmbedObject).toArray(String[]::new);
+        var objects = flights.stream().map(f -> buildEmbedObject(f, null)).toArray(String[]::new);
         String payload = String.format(
             "{\"content\": \"🛫 **%d new flights detected!**\", \"embeds\": [%s]}",
             flights.size(), String.join(",", objects));
@@ -161,7 +167,7 @@ public class DiscordFlightNotifier implements FlightNotifier {
     }
 
     private void sendWebhook(String payload) {
-        if (doPost(payload, "message")) log.info("Discord message sent successfully");
+        doPost(payload, "message");
     }
 
     private boolean doPost(String payload, String description) {
@@ -189,33 +195,69 @@ public class DiscordFlightNotifier implements FlightNotifier {
         }
     }
 
-    private String buildEmbedObject(Flight flight) {
+    private String buildEmbedObject(Flight flight, String note) {
         String type = flight.aircraft() != null ? flight.aircraft().toUpperCase() : "UNKNOWN";
         Category cat = Category.from(AircraftTypes.classify(type));
 
-        String altStr = flight.altitude() != null ? String.format("%d ft", flight.altitude()) : "N/A";
-        String spdStr = flight.speed()    != null ? String.format("%d kts", flight.speed())   : "N/A";
+        String altStr  = flight.altitude() != null ? String.format("%d ft",  flight.altitude()) : "N/A";
+        String spdStr  = flight.speed()    != null ? String.format("%d kts", flight.speed())    : "N/A";
+        String flag    = ICAOCountry.flagFromHex(flight.hexIdent());
+        String titlePrefix = flag.isEmpty() ? "" : flag + " ";
+
+        StringBuilder fields = new StringBuilder();
+        fields.append(String.format(
+            "{\"name\": \"Aircraft\", \"value\": \"%s\", \"inline\": true},"
+          + "{\"name\": \"Altitude\", \"value\": \"%s\", \"inline\": true},"
+          + "{\"name\": \"Speed\",    \"value\": \"%s\", \"inline\": true},"
+          + "{\"name\": \"Time\",     \"value\": \"%s\", \"inline\": true}",
+            escapeJson(type), escapeJson(altStr), escapeJson(spdStr),
+            flight.scheduledTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+        ));
+        if (note != null && !note.isBlank()) {
+            fields.append(String.format(",{\"name\": \"ℹ️\", \"value\": \"%s\", \"inline\": true}",
+                    escapeJson(note)));
+        }
 
         return String.format("""
                 {
                   "title": "%s",
                   "color": %d,
-                  "fields": [
-                    {"name": "Aircraft", "value": "%s", "inline": true},
-                    {"name": "Altitude", "value": "%s", "inline": true},
-                    {"name": "Speed",    "value": "%s", "inline": true},
-                    {"name": "Time",     "value": "%s", "inline": true}
-                  ],
-                  "footer": {"text": "FlightTracker ADS-B"}
+                  "fields": [%s],
+                  "footer": {"text": "FlightScanner ADS-B"}
                 }
                 """,
-                escapeJson(cat.title(flight.flightNumber())),
+                escapeJson(titlePrefix + cat.title(flight.flightNumber())),
                 cat.color,
-                escapeJson(type),
-                escapeJson(altStr),
-                escapeJson(spdStr),
-                flight.scheduledTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                fields
         );
+    }
+
+    @Override
+    public void sendDailyDigest(List<Flight> flights, java.time.LocalDate date) {
+        if (!enabled || flights.isEmpty()) return;
+        long widebody = flights.stream().filter(f ->
+                AircraftTypes.classify(f.aircraft()) == AircraftTypes.AircraftCategory.WIDEBODY).count();
+        long military = flights.stream().filter(f ->
+                AircraftTypes.classify(f.aircraft()) == AircraftTypes.AircraftCategory.MILITARY).count();
+        long bizjet = flights.stream().filter(f ->
+                AircraftTypes.classify(f.aircraft()) == AircraftTypes.AircraftCategory.BIZJET).count();
+        long total = flights.size();
+
+        String payload = String.format(
+            "{\"embeds\": [{\"title\": \"📋 Daily digest — %s\","
+          + " \"color\": 5793266,"
+          + " \"fields\": ["
+          + "   {\"name\": \"Total flights\", \"value\": \"%d\", \"inline\": true},"
+          + "   {\"name\": \"🛫 Widebody\",  \"value\": \"%d\", \"inline\": true},"
+          + "   {\"name\": \"🪖 Military\",  \"value\": \"%d\", \"inline\": true},"
+          + "   {\"name\": \"🛩 Bizjet\",    \"value\": \"%d\", \"inline\": true}"
+          + " ],"
+          + " \"footer\": {\"text\": \"FlightScanner ADS-B\"}"
+          + "}]}",
+            date, total, widebody, military, bizjet);
+        sendWebhook(payload);
+        log.info("Daily digest sent for {}: {} flights ({} widebody, {} military, {} bizjet)",
+                date, total, widebody, military, bizjet);
     }
 
     /** Builds an ALERT-specific embed with squawk shown prominently. */

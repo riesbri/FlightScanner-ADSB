@@ -3,7 +3,7 @@
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.flightscanner</groupId>
-	<artifactId>FlightScraper</artifactId>
+	<artifactId>flightscanner</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>FlightTracker</name>
 	<description>Java Flight Tracking Framework</description>
@@ -12,7 +12,6 @@
 		<java.version>21</java.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- Latest versions as of May 2025 -->
-		<playwright.version>1.45.0</playwright.version>
 		<sqlite.version>3.45.2.0</sqlite.version>
 		<httpclient.version>5.4.4</httpclient.version>
 		<jackson.version>2.17.1</jackson.version>
@@ -23,13 +22,6 @@
 	</properties>
 
 	<dependencies>
-		<!-- Playwright -->
-		<dependency>
-			<groupId>com.microsoft.playwright</groupId>
-			<artifactId>playwright</artifactId>
-			<version>${playwright.version}</version>
-		</dependency>
-
 		<!-- SQLite -->
 		<dependency>
 			<groupId>org.xerial</groupId>

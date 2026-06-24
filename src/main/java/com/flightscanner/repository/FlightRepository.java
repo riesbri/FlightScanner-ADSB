@@ -43,7 +43,24 @@ public interface FlightRepository {
      * Get recent flights (last N hours)
      */
     List<Flight> findRecent(int hoursBack);
-    
+
+    /**
+     * Find the most recent date this flight number was seen before the given time.
+     * Used to generate "last seen N days ago" notes in notifications.
+     */
+    default java.util.Optional<java.time.LocalDate> findLastSeen(String flightNumber,
+                                                                  java.time.LocalDateTime before) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Get flights within an explicit datetime range (inclusive from, exclusive to).
+     * Only TEXT-format scheduled_time rows are returned (guards against legacy epoch-millis rows).
+     */
+    default List<Flight> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        return java.util.List.of();
+    }
+
     /**
      * Close the repository and release resources
      */
