@@ -65,7 +65,7 @@ public record AirportCoords(String code, double lat, double lon) {
      * should disable the proximity filter in that case.
      */
     public static AirportCoords resolve(ConfigManager config) {
-        String code = config.getString("airport.code", "VLC").toUpperCase().trim();
+        String code = config.getString("airport.code", "MAD").toUpperCase().trim();
         String latStr = config.getString("airport.coordinates.lat", "").trim();
         String lonStr = config.getString("airport.coordinates.lon", "").trim();
 
