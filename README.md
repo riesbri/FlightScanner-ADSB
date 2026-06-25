@@ -66,6 +66,9 @@ java -jar target/flightscanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 
 Open `http://localhost:3006/` for the dashboard.
 
+> **Just want to check it sees traffic?** Run with `--dry-run [seconds]` to listen and print flights to stdout without sending any Discord notifications, then exit (default 60s):
+> `java -jar target/flightscanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar --dry-run 30`
+
 > **Not near Madrid?** The default airport is MAD (Madrid-Barajas). Set `airport.code` to your nearest IATA code in `application.properties`, or override with exact coordinates using `airport.coordinates.lat` / `airport.coordinates.lon` — see [Airport proximity filter](#-airport-proximity-filter) below.
 
 ---
