@@ -1,13 +1,6 @@
 <div align="center">
 
-```
-    __ _ _   ___   _ __ ___    _ __ ___   _____   _(_)_   _____ 
-   / _` | | / __| | '_ ` _ \  | '_ ` _ \ / _ \ \ / / \ \ / / _ \
-  | (_| | || (__  | | | | | | | | | | | |  __/\ V /| |\ V /  __/
-   \__,_|_| \___| |_| |_| |_| |_| |_| |_|\___| \_/ |_| \_/ \___|
-```
-
-### Real-time ADS-B aircraft tracker. Java 21. Zero AI. Maximum signal.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00F5FF,50:7B2FF7,100:FF2DAF&height=220&section=header&text=FlightScanner&fontSize=70&fontColor=ffffff&fontAlignY=38&desc=Real-time%20ADS-B%20aircraft%20tracker%20%E2%80%A2%20Java%2021%20%E2%80%A2%20Zero%20AI%20%E2%80%A2%20Maximum%20signal&descSize=18&descAlignY=58" width="100%" alt="FlightScanner — real-time ADS-B aircraft tracker" />
 
 **FlightScanner** listens to a `dump1090-fa` SDR receiver, enriches aircraft
 via `adsb.lol`, persists to SQLite, and pings Discord when something
@@ -17,12 +10,13 @@ always-on ALERT tier for emergency squawks / low altitude / gov hex ranges.
 <br>
 
 [![CI](https://github.com/riesbri/FlightScanner-ADSB/actions/workflows/ci.yml/badge.svg)](https://github.com/riesbri/FlightScanner-ADSB/actions/workflows/ci.yml)
-![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
-![Maven](https://img.shields.io/badge/Maven-3.8%2B-C71A36?logo=apachemaven&logoColor=white)
-![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-22c55e)
-![No AI](https://img.shields.io/badge/AI-none-d946ef)
-![Discord](https://img.shields.io/badge/Discord-webhook%20ready-5865F2?logo=discord&logoColor=white)
+
+![Java](https://img.shields.io/badge/Java-21-00F5FF?style=for-the-badge&logo=openjdk&logoColor=black)
+![Maven](https://img.shields.io/badge/Maven-3.8+-7B2FF7?style=for-the-badge&logo=apachemaven&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-FF2DAF?style=for-the-badge&logo=sqlite&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-00F5FF?style=for-the-badge)
+![Zero AI](https://img.shields.io/badge/AI-NONE-FF2DAF?style=for-the-badge)
+![Discord](https://img.shields.io/badge/Discord-ready-7B2FF7?style=for-the-badge&logo=discord&logoColor=white)
 
 </div>
 
