@@ -5,20 +5,20 @@ Thanks for taking an interest. Contributions are welcome — bug fixes, new airc
 ## Requirements
 
 - Java 21 (Temurin recommended)
-- Maven 3.8+ (or use the included `./mvnw` wrapper)
+- Maven 3.8+
 - A `dump1090-fa` instance on `localhost:30003` for manual integration testing (not required just to run the unit tests)
 
 ## Build and test
 
 ```bash
-# Compile and run the full test suite (91 tests, no external services needed)
-JAVA_HOME=/path/to/java-21 ./mvnw test
+# Compile and run the full test suite (111 tests, no external services needed)
+JAVA_HOME=/path/to/java-21 mvn test
 
 # Build the fat JAR
-JAVA_HOME=/path/to/java-21 ./mvnw package -DskipTests -q
+JAVA_HOME=/path/to/java-21 mvn package -DskipTests -q
 ```
 
-All 91 tests must pass before submitting a PR. CI will verify this automatically.
+All 111 tests must pass before submitting a PR. CI will verify this automatically.
 
 ## Key files to know
 
@@ -33,7 +33,7 @@ All 91 tests must pass before submitting a PR. CI will verify this automatically
 
 1. Fork the repo and create a branch from `main`.
 2. Make your change. If it touches behaviour, add or update a test.
-3. Run `./mvnw test` — all tests must pass.
+3. Run `mvn test` — all tests must pass.
 4. Open a pull request against `main` with a clear description of what changed and why.
 
 Please keep PRs focused: one logical change per PR makes review faster.
