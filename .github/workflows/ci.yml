@@ -22,3 +22,6 @@ jobs:
 
       - name: Run tests
         run: mvn test -q
+
+      - name: Build fat JAR
+        run: mvn package -DskipTests -q

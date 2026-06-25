@@ -16,6 +16,7 @@ always-on ALERT tier for emergency squawks / low altitude / gov hex ranges.
 
 <br>
 
+[![CI](https://github.com/riesbri/FlightScanner-ADSB/actions/workflows/ci.yml/badge.svg)](https://github.com/riesbri/FlightScanner-ADSB/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-3.8%2B-C71A36?logo=apachemaven&logoColor=white)
 ![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)
@@ -50,8 +51,8 @@ You need three things running locally: a `dump1090-fa` instance feeding
 SBS, Java 21, and a Discord webhook URL.
 
 ```bash
-git clone https://github.com/riesbri/FlightScanner.git
-cd FlightScanner
+git clone https://github.com/riesbri/FlightScanner-ADSB.git
+cd FlightScanner-ADSB
 
 # Build
 JAVA_HOME=/path/to/java-21 mvn package -DskipTests -q
