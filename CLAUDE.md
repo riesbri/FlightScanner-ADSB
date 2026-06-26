@@ -2,6 +2,8 @@
 
 > Developer context for AI assistants. Deployment notes assume a Linux host running the app as a systemd user service. See README.md for general usage.
 
+> **PUBLIC REPO — never commit secrets.** `flightscanner.env`, `*.db`, Discord webhook URLs, API keys, IP addresses, and any personal data must stay out of git. They are covered by `.gitignore` but double-check before every commit. Do not add new files containing secrets without updating `.gitignore` first.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Summary
