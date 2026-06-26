@@ -13,7 +13,6 @@ jobs:
   analyze:
     name: Analyze (java)
     runs-on: ubuntu-latest
-    if: ${{ !github.event.repository.private }}
     permissions:
       security-events: write
       actions: read
